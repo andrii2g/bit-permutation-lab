@@ -21,7 +21,21 @@ internal static class Program
 
             if (options.Mode == BenchmarkModeKind.BenchmarkDotNet || string.Equals(execution.ModeLabel, BenchmarkModeKind.BenchmarkDotNet.ToString(), StringComparison.OrdinalIgnoreCase))
             {
-                BenchmarkDotNetRunner.Run(loaded.Scenarios);
+                var summary = BenchmarkDotNetRunner.Run(loaded.Scenarios);
+                BenchmarkRunResult benchmarkDotNetResult = BenchmarkDotNetSummaryConverter.Convert(
+                    summary,
+                    execution with { ModeLabel = BenchmarkModeKind.BenchmarkDotNet.ToString() });
+
+                if (!string.IsNullOrWhiteSpace(options.OutputMarkdown ?? loaded.OutputMarkdown))
+                {
+                    WriteMarkdown(benchmarkDotNetResult, options.OutputMarkdown ?? loaded.OutputMarkdown!, loaded.Top);
+                }
+
+                if (!string.IsNullOrWhiteSpace(options.OutputCsv ?? loaded.OutputCsv))
+                {
+                    WriteCsv(benchmarkDotNetResult, options.OutputCsv ?? loaded.OutputCsv!);
+                }
+
                 return 0;
             }
 
@@ -55,7 +69,21 @@ internal static class Program
         if (options.Mode == BenchmarkModeKind.BenchmarkDotNet)
         {
             IReadOnlyList<BenchmarkScenario> scenarios = BenchmarkProfileFactory.Create(directExecution.Selection);
-            BenchmarkDotNetRunner.Run(scenarios);
+            var summary = BenchmarkDotNetRunner.Run(scenarios);
+            BenchmarkRunResult benchmarkDotNetResult = BenchmarkDotNetSummaryConverter.Convert(
+                summary,
+                directExecution with { ModeLabel = BenchmarkModeKind.BenchmarkDotNet.ToString() });
+
+            if (!string.IsNullOrWhiteSpace(options.OutputMarkdown))
+            {
+                WriteMarkdown(benchmarkDotNetResult, options.OutputMarkdown, options.Top);
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.OutputCsv))
+            {
+                WriteCsv(benchmarkDotNetResult, options.OutputCsv);
+            }
+
             return 0;
         }
 

@@ -1,0 +1,136 @@
+using A2G.BitPermutationLab.Benchmarking;
+using A2G.BitPermutationLab.Core;
+using BenchmarkDotNet.Reports;
+using BenchmarkDotNet.Running;
+
+namespace A2G.BitPermutationLab.Benchmarks;
+
+internal static class BenchmarkDotNetSummaryConverter
+{
+    public static BenchmarkRunResult Convert(
+        Summary summary,
+        BenchmarkExecutionOptions options)
+    {
+        Dictionary<string, ScenarioMeasurement> measurements = new(StringComparer.Ordinal);
+
+        foreach (BenchmarkReport report in summary.Reports)
+        {
+            if (!TryGetScenarioCase(report.BenchmarkCase, out ScenarioBenchmarkCase? scenarioCase))
+            {
+                continue;
+            }
+
+            if (!measurements.TryGetValue(scenarioCase.DisplayName, out ScenarioMeasurement? measurement))
+            {
+                measurement = new ScenarioMeasurement(scenarioCase);
+                measurements[scenarioCase.DisplayName] = measurement;
+            }
+
+            string methodName = report.BenchmarkCase.Descriptor.WorkloadMethod.Name;
+            double meanNanoseconds = report.ResultStatistics?.Mean ?? 0d;
+
+            switch (methodName)
+            {
+                case nameof(ScenarioBenchmarks.Encode):
+                    measurement.EncodeNanoseconds = meanNanoseconds;
+                    measurement.EncodeOperationsPerSecond = ToOperationsPerSecond(meanNanoseconds);
+                    measurement.AllocatedBytes = (long)Math.Round(report.GcStats.BytesAllocatedPerOperation);
+                    break;
+                case nameof(ScenarioBenchmarks.Decode):
+                    measurement.DecodeNanoseconds = meanNanoseconds;
+                    measurement.DecodeOperationsPerSecond = ToOperationsPerSecond(meanNanoseconds);
+                    measurement.AllocatedBytes = Math.Max(
+                        measurement.AllocatedBytes,
+                        (long)Math.Round(report.GcStats.BytesAllocatedPerOperation));
+                    break;
+            }
+        }
+
+        List<BenchmarkResultRow> rows = [.. measurements.Values
+            .Select(static measurement => measurement.ToRow(options))
+            .OrderBy(static row => row.ScenarioId, StringComparer.Ordinal)
+            .ThenBy(static row => row.InputValue)];
+
+        return new BenchmarkRunResult(options, rows, [], DateTimeOffset.UtcNow);
+    }
+
+    private static bool TryGetScenarioCase(BenchmarkCase benchmarkCase, out ScenarioBenchmarkCase? scenarioCase)
+    {
+        foreach (var parameter in benchmarkCase.Parameters.Items)
+        {
+            if (parameter.Value is ScenarioBenchmarkCase typed)
+            {
+                scenarioCase = typed;
+                return true;
+            }
+        }
+
+        scenarioCase = null;
+        return false;
+    }
+
+    private static double ToOperationsPerSecond(double nanoseconds)
+    {
+        return nanoseconds <= 0d ? 0d : 1_000_000_000d / nanoseconds;
+    }
+
+    private sealed class ScenarioMeasurement
+    {
+        public ScenarioMeasurement(ScenarioBenchmarkCase scenarioCase)
+        {
+            ScenarioCase = scenarioCase;
+        }
+
+        public ScenarioBenchmarkCase ScenarioCase { get; }
+
+        public double EncodeNanoseconds { get; set; }
+
+        public double DecodeNanoseconds { get; set; }
+
+        public double EncodeOperationsPerSecond { get; set; }
+
+        public double DecodeOperationsPerSecond { get; set; }
+
+        public long AllocatedBytes { get; set; }
+
+        public BenchmarkResultRow ToRow(BenchmarkExecutionOptions options)
+        {
+            return new BenchmarkResultRow(
+                options.ProfileLabel,
+                options.ModeLabel,
+                ScenarioCase.ScenarioId,
+                ScenarioCase.ScenarioName,
+                ScenarioCase.ValueRangeKind,
+                ScenarioCase.SelectionWeight,
+                ScenarioCase.ExpectedCostFactor,
+                ScenarioCase.IsRequiredBaseline,
+                ScenarioCase.Parameters.BitLength,
+                ScenarioCase.Parameters.Mixer.Kind,
+                ScenarioCase.Parameters.Permutation.Kind,
+                ScenarioCase.Parameters.Chunking.ChunkSize,
+                ScenarioCase.Parameters.Emitter.Kind,
+                ScenarioCase.Parameters.Emitter.OutputKind,
+                ScenarioCase.InputValue,
+                ScenarioCase.Encoded.OutputLength,
+                EncodeNanoseconds,
+                DecodeNanoseconds,
+                EncodeNanoseconds + DecodeNanoseconds,
+                EncodeOperationsPerSecond,
+                DecodeOperationsPerSecond,
+                AllocatedBytes,
+                true,
+                RenderSample(ScenarioCase.Encoded));
+        }
+
+        private static string RenderSample(CodecResult encoded)
+        {
+            return encoded.OutputKind switch
+            {
+                OutputKind.String => encoded.StringValue ?? string.Empty,
+                OutputKind.CharArray => new string(encoded.CharArrayValue ?? Array.Empty<char>()),
+                OutputKind.ByteArray => Convert.ToHexString(encoded.ByteArrayValue ?? Array.Empty<byte>()),
+                _ => string.Empty
+            };
+        }
+    }
+}

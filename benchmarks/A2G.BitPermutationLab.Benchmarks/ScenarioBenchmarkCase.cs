@@ -1,3 +1,4 @@
+using A2G.BitPermutationLab.Benchmarking;
 using A2G.BitPermutationLab.Core;
 
 namespace A2G.BitPermutationLab.Benchmarks;

@@ -12,9 +12,9 @@ It is not cryptography. The goal is to compare reversible combinations of:
 ## Current shape
 
 - Library: full parameter model and codec pipeline
-- CLI: simplified `encode`, `decode`, `list`, and `benchmark`
-- Tests: round-trip, validation, emitter, and simplified CLI coverage
-- Benchmarks: code-driven benchmark profiles with weighting, deterministic sampling, and matrix-style reporting
+- CLI: `encode`, `decode`, `list`, and `benchmark` with direct advanced scenario flags
+- Tests: round-trip, validation, emitter, config, plugin-loading, and CLI coverage
+- Benchmarks: code-driven profiles, config-driven runs, weighting, deterministic sampling, quick-mode reports, and BenchmarkDotNet mode
 
 ## CLI examples
 
@@ -56,10 +56,49 @@ List supported simplified CLI values:
 dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll list
 ```
 
+Encode with advanced permutation settings and a plugin-loaded custom mutation:
+
+```powershell
+dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll encode `
+  --value 12345 `
+  --number-kind uint32 `
+  --bits 32 `
+  --salt-text demo-seed `
+  --mix xor `
+  --permute feistel `
+  --feistel-rounds 2 `
+  --feistel-round-function xorshift-add `
+  --chunk-size 4 `
+  --emitter hex16 `
+  --alphabet hex16 `
+  --custom-mutation-name plugin-xor `
+  --custom-mutation-position after-mix `
+  --custom-mutation-plugin .\plugins\MyMutations.dll `
+  --custom-mutation-type MyNamespace.PluginXorMutation
+```
+
 Run a benchmark profile:
 
 ```powershell
 dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll benchmark --profile quick --iterations 1000
+```
+
+Run a direct single-scenario benchmark through BenchmarkDotNet:
+
+```powershell
+dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll benchmark `
+  --mode benchmarkdotnet `
+  --iterations 1000 `
+  --number-kind uint32 `
+  --bits 32 `
+  --salt 42 `
+  --mix xor `
+  --permute rotate `
+  --rotate-by 11 `
+  --chunk-size 4 `
+  --emitter hex16 `
+  --alphabet hex16 `
+  --value-set middle
 ```
 
 Run a weighted benchmark selection:
@@ -77,7 +116,12 @@ dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab
 
 ## Benchmarking approach
 
-The CLI benchmark command is intentionally simple. For most real experimentation, define scenarios in code and use the library directly.
+The CLI benchmark command supports three entry paths:
+- built-in profiles
+- direct single-scenario benchmarking from CLI flags
+- JSON config files
+
+For larger experiment sets, code-driven scenarios are still the most maintainable option.
 
 Built-in profiles:
 - `quick`
@@ -98,6 +142,10 @@ The benchmark path supports:
 - `--include-required-baselines`
 - `--report-weighted`
 - `--report-unweighted`
+- `--mode quick|benchmarkdotnet`
+- `--config <benchmark.json>`
+- `--output <report.md>`
+- `--csv <report.csv>`
 
 Current benchmark output is split into two views:
 - `Raw Performance Matrix`
@@ -123,9 +171,11 @@ dotnet run --project .\benchmarks\A2G.BitPermutationLab.Benchmarks -- `
   --report-unweighted false
 ```
 
+Config-driven benchmark runs may include custom mutation plugin loading through JSON `pluginPath` and `typeName` fields.
+
 ## Status
 
-Advanced scenario shaping remains code-first. The simplified CLI intentionally does not expose every internal parameter from the plan.
+Most of the `PLAN.md` feature surface is implemented, including advanced direct CLI scenario flags, custom mutation plugin loading, config-driven benchmarks, quick-mode reports, and BenchmarkDotNet mode.
 
 The current weighting implementation covers:
 - required baselines
@@ -135,5 +185,4 @@ The current weighting implementation covers:
 
 What is still intentionally lightweight:
 - no external weights config file yet
-- no allocation measurement yet in the matrix report
-- no full scenario/config authoring surface in the CLI
+- BenchmarkDotNet runs are a separate execution path and do not yet feed back into the quick-mode Markdown/CSV matrix exporters
