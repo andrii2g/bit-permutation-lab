@@ -37,7 +37,7 @@ public static class BenchmarkRunner
                     scenario.Parameters.Mixer.Kind,
                     scenario.Parameters.Permutation.Kind,
                     scenario.Parameters.Chunking.ChunkSize,
-                    scenario.Parameters.Emitter.EmitterKind,
+                    scenario.Parameters.Emitter.Kind,
                     scenario.Parameters.Emitter.OutputKind,
                     value,
                     encoded.OutputLength,

@@ -1,3 +1,5 @@
+using A2G.BitPermutationLab.Core;
+
 namespace A2G.BitPermutationLab.Benchmarking;
 
 public static class BenchmarkScenarioSelector
@@ -83,7 +85,7 @@ public static class BenchmarkScenarioSelector
     private static double GetEffectiveSelectionWeight(BenchmarkScenario scenario, WeightingProfileKind weightingProfile)
     {
         double effectiveWeight = Math.Max(0.000001d, scenario.Weights.SelectionWeight);
-        double emitterFactor = scenario.Parameters.Emitter.EmitterKind switch
+        double emitterFactor = scenario.Parameters.Emitter.Kind switch
         {
             EmitterKind.ByteArray => 1.25,
             EmitterKind.Base64Url => 1.15,

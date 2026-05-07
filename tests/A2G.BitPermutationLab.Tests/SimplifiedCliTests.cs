@@ -183,7 +183,7 @@ public sealed class SimplifiedCliTests
 
         Assert.Equal(0, exitCode);
         Assert.Contains("Profile: Quick", stdout.ToString());
-        Assert.Contains("Raw Performance", stdout.ToString());
+        Assert.Contains("Raw Performance Matrix", stdout.ToString());
         Assert.Contains("Weighting Metadata", stdout.ToString());
         Assert.Equal(string.Empty, stderr.ToString());
     }
@@ -205,7 +205,7 @@ public sealed class SimplifiedCliTests
 
         Assert.Equal(0, exitCode);
         Assert.Contains("Weighting Metadata", stdout.ToString());
-        Assert.DoesNotContain("Raw Performance", stdout.ToString());
+        Assert.DoesNotContain("Raw Performance Matrix", stdout.ToString());
         Assert.Equal(string.Empty, stderr.ToString());
     }
 
