@@ -1,0 +1,156 @@
+using System.Text;
+using A2G.BitPermutationLab.Cli;
+
+namespace A2G.BitPermutationLab.Tests;
+
+public sealed class SimplifiedCliTests
+{
+    [Fact]
+    public void Encode_SimpleScenario_WritesEncodedValue()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "encode",
+            "--value", "12345",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "42",
+            "--mix", "xor",
+            "--permute", "rotate",
+            "--chunk-size", "4",
+            "--emitter", "hex16",
+            "--alphabet", "hex16",
+            "--output-kind", "string"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Encoded:", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Decode_SimpleScenario_RoundTripsKnownValue()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "decode",
+            "--value", "7B0E8450",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "42",
+            "--mix", "xor",
+            "--permute", "rotate",
+            "--chunk-size", "4",
+            "--emitter", "hex16",
+            "--alphabet", "hex16",
+            "--output-kind", "string"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Decoded: 12345", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Rejects_AdvancedRotateByFlag()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "encode",
+            "--value", "12345",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "42",
+            "--mix", "xor",
+            "--permute", "rotate",
+            "--rotate-by", "7",
+            "--chunk-size", "4",
+            "--emitter", "hex16"
+        ], stdout, stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("intentionally not exposed", stderr.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Rejects_FeistelScenario_OnSimplifiedCli()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "encode",
+            "--value", "12345",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "42",
+            "--mix", "xor",
+            "--permute", "feistel",
+            "--chunk-size", "4",
+            "--emitter", "hex16"
+        ], stdout, stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("does not expose chunk permutation or Feistel", stderr.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ByteArrayScenario_EncodesAndDecodes()
+    {
+        var encodeStdout = new StringWriter(new StringBuilder());
+        var encodeStderr = new StringWriter(new StringBuilder());
+
+        int encodeExitCode = CliApplication.Run(
+        [
+            "encode",
+            "--value", "12345",
+            "--number-kind", "uint64",
+            "--bits", "64",
+            "--salt", "0",
+            "--mix", "none",
+            "--permute", "identity",
+            "--chunk-size", "8",
+            "--emitter", "bytes",
+            "--alphabet", "none",
+            "--output-kind", "byte-array",
+            "--byte-array-format", "hex"
+        ], encodeStdout, encodeStderr);
+
+        Assert.Equal(0, encodeExitCode);
+        string encoded = encodeStdout.ToString().Trim();
+        Assert.StartsWith("EncodedBytesHex: ", encoded, StringComparison.Ordinal);
+
+        string payload = encoded["EncodedBytesHex: ".Length..];
+        var decodeStdout = new StringWriter(new StringBuilder());
+        var decodeStderr = new StringWriter(new StringBuilder());
+
+        int decodeExitCode = CliApplication.Run(
+        [
+            "decode",
+            "--value", payload,
+            "--number-kind", "uint64",
+            "--bits", "64",
+            "--salt", "0",
+            "--mix", "none",
+            "--permute", "identity",
+            "--chunk-size", "8",
+            "--emitter", "bytes",
+            "--alphabet", "none",
+            "--output-kind", "byte-array",
+            "--byte-array-format", "hex"
+        ], decodeStdout, decodeStderr);
+
+        Assert.Equal(0, decodeExitCode);
+        Assert.Contains("Decoded: 12345", decodeStdout.ToString());
+    }
+}

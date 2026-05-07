@@ -122,7 +122,7 @@ internal static class Program
             emitterKind,
             arguments.GetEnum("alphabet", DefaultAlphabetKind(emitterKind), ParseAlphabetKind),
             arguments.GetEnum("output-kind", DefaultOutputKind(emitterKind), ParseOutputKind),
-            arguments.GetEnum("byte-array-format", ByteArrayTextFormat.Hex, ParseByteArrayTextFormat));
+            ByteArrayTextFormat: arguments.GetEnum("byte-array-format", ByteArrayTextFormat.Hex, ParseByteArrayTextFormat));
 
         return new CodecParameters(
             arguments.GetOptionalString("scenario-name") ?? "cli-scenario",

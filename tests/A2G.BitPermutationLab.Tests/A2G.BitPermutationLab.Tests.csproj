@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\A2G.BitPermutationLab\A2G.BitPermutationLab.csproj" />
+    <ProjectReference Include="..\..\tools\A2G.BitPermutationLab.Cli\A2G.BitPermutationLab.Cli.csproj" />
   </ItemGroup>
 
 </Project>
