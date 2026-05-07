@@ -1,2 +1,14 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/A2G.BitPermutationLab.Benchmarks/A2G.BitPermutationLab.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/A2G.BitPermutationLab/A2G.BitPermutationLab.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/A2G.BitPermutationLab.Tests/A2G.BitPermutationLab.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/A2G.BitPermutationLab.Cli/A2G.BitPermutationLab.Cli.csproj" />
+  </Folder>
 </Solution>

@@ -4,6 +4,8 @@ obj/
 .vscode/
 TestResults/
 BenchmarkDotNet.Artifacts/
+.dotnet-home/
+.nuget-packages/
 *.user
 *.suo
 /.dotnet-home
