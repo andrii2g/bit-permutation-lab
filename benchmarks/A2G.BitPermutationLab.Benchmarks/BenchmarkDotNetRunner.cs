@@ -29,6 +29,12 @@ internal static class BenchmarkDotNetRunner
                 CodecResult encoded = pipeline.Encode(value, scenario.Parameters);
                 yield return new ScenarioBenchmarkCase(
                     $"{scenario.ScenarioId}:{value}",
+                    scenario.ScenarioId,
+                    scenario.Name,
+                    scenario.ValueRangeKind,
+                    scenario.Weights.SelectionWeight,
+                    scenario.Weights.ExpectedCostFactor,
+                    scenario.Weights.IsRequiredBaseline,
                     value,
                     scenario.Parameters,
                     encoded);
