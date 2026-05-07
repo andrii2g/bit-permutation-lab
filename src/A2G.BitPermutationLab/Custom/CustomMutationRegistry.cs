@@ -10,13 +10,27 @@ public static class CustomMutationRegistry
     public static void Register(ICustomMutation mutation)
     {
         ArgumentNullException.ThrowIfNull(mutation);
-        Mutations[mutation.Name] = mutation;
+        Register(mutation.Name, mutation);
     }
 
     public static void Register(ICustomChunkMutation mutation)
     {
         ArgumentNullException.ThrowIfNull(mutation);
-        ChunkMutations[mutation.Name] = mutation;
+        Register(mutation.Name, mutation);
+    }
+
+    public static void Register(string name, ICustomMutation mutation)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(mutation);
+        Mutations[name] = mutation;
+    }
+
+    public static void Register(string name, ICustomChunkMutation mutation)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(mutation);
+        ChunkMutations[name] = mutation;
     }
 
     public static bool TryGetMutation(string name, out ICustomMutation mutation) =>

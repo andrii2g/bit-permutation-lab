@@ -21,13 +21,14 @@ public static class BenchmarkConfigLoader
 
     public static LoadedBenchmarkConfig Load(string path)
     {
+        string baseDirectory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? Directory.GetCurrentDirectory();
         BenchmarkConfigDocument document = JsonSerializer.Deserialize<BenchmarkConfigDocument>(File.ReadAllText(path), JsonOptions)
             ?? throw new InvalidOperationException("Benchmark config could not be parsed.");
 
         List<BenchmarkScenario> scenarios = [];
         foreach (BenchmarkScenarioDocument scenario in document.Scenarios ?? [])
         {
-            scenarios.Add(ToScenario(scenario));
+            scenarios.Add(ToScenario(scenario, baseDirectory));
         }
 
         BenchmarkExecutionDocument benchmark = document.Benchmark ?? new BenchmarkExecutionDocument();
@@ -60,14 +61,14 @@ public static class BenchmarkConfigLoader
             benchmark.Top ?? 5);
     }
 
-    private static BenchmarkScenario ToScenario(BenchmarkScenarioDocument document)
+    private static BenchmarkScenario ToScenario(BenchmarkScenarioDocument document, string baseDirectory)
     {
         if (document.Parameters is null)
         {
             throw new InvalidOperationException($"Scenario '{document.Name ?? "<unnamed>"}' is missing parameters.");
         }
 
-        CodecParameters parameters = ToParameters(document.Name, document.Parameters);
+        CodecParameters parameters = ToParameters(document.Name, document.Parameters, baseDirectory);
         IReadOnlyList<ulong> values = document.Values?.Count > 0
             ? document.Values
             : BenchmarkProfileFactory.GetValues(ValueRangeKind.Small);
@@ -89,7 +90,7 @@ public static class BenchmarkConfigLoader
         return new BenchmarkScenario(scenarioId, scenarioName, parameters with { Name = scenarioName }, rangeKind, values, weights);
     }
 
-    private static CodecParameters ToParameters(string? scenarioName, CodecParametersDocument document)
+    private static CodecParameters ToParameters(string? scenarioName, CodecParametersDocument document, string baseDirectory)
     {
         ulong saltSeed = ResolveSaltSeed(document.SaltSeed, document.SaltText);
         return new CodecParameters(
@@ -102,8 +103,8 @@ public static class BenchmarkConfigLoader
             ToPermutation(document.Permutation),
             ToChunking(document.Chunking),
             ToEmitter(document.Emitter),
-            ToCustomMutation(document.CustomMutation),
-            ToCustomChunkMutation(document.CustomChunkMutation));
+            ToCustomMutation(document.CustomMutation, baseDirectory),
+            ToCustomChunkMutation(document.CustomChunkMutation, baseDirectory));
     }
 
     private static BinaryParameters ToBinary(BinaryParametersDocument? document)
@@ -181,30 +182,60 @@ public static class BenchmarkConfigLoader
             ParseEnum(document.ByteArrayTextFormat, ByteArrayTextFormat.Hex));
     }
 
-    private static CustomMutationParameters? ToCustomMutation(CustomMutationParametersDocument? document)
+    private static CustomMutationParameters? ToCustomMutation(CustomMutationParametersDocument? document, string baseDirectory)
     {
         if (document is null)
         {
             return null;
         }
 
+        string? name = document.Name;
+        if (!string.IsNullOrWhiteSpace(document.PluginPath) || !string.IsNullOrWhiteSpace(document.TypeName))
+        {
+            name = CustomMutationPluginLoader.LoadBitMutation(
+                ResolvePluginPath(baseDirectory, document.PluginPath),
+                document.TypeName ?? throw new InvalidOperationException("customMutation.typeName is required when pluginPath is specified."),
+                name);
+        }
+
         return new CustomMutationParameters(
-            document.Name ?? throw new InvalidOperationException("customMutation.name is required."),
+            name ?? throw new InvalidOperationException("customMutation.name is required."),
             ParseRequiredEnum<CustomMutationPosition>(document.Position, nameof(document.Position)),
             document.Parameters ?? new Dictionary<string, string>(StringComparer.Ordinal));
     }
 
-    private static CustomChunkMutationParameters? ToCustomChunkMutation(CustomChunkMutationParametersDocument? document)
+    private static CustomChunkMutationParameters? ToCustomChunkMutation(CustomChunkMutationParametersDocument? document, string baseDirectory)
     {
         if (document is null)
         {
             return null;
         }
 
+        string? name = document.Name;
+        if (!string.IsNullOrWhiteSpace(document.PluginPath) || !string.IsNullOrWhiteSpace(document.TypeName))
+        {
+            name = CustomMutationPluginLoader.LoadChunkMutation(
+                ResolvePluginPath(baseDirectory, document.PluginPath),
+                document.TypeName ?? throw new InvalidOperationException("customChunkMutation.typeName is required when pluginPath is specified."),
+                name);
+        }
+
         return new CustomChunkMutationParameters(
-            document.Name ?? throw new InvalidOperationException("customChunkMutation.name is required."),
+            name ?? throw new InvalidOperationException("customChunkMutation.name is required."),
             ParseRequiredEnum<CustomChunkMutationPosition>(document.Position, nameof(document.Position)),
             document.Parameters ?? new Dictionary<string, string>(StringComparer.Ordinal));
+    }
+
+    private static string ResolvePluginPath(string baseDirectory, string? pluginPath)
+    {
+        if (string.IsNullOrWhiteSpace(pluginPath))
+        {
+            throw new InvalidOperationException("Custom mutation pluginPath is required when typeName is specified.");
+        }
+
+        return Path.IsPathRooted(pluginPath)
+            ? pluginPath
+            : Path.GetFullPath(Path.Combine(baseDirectory, pluginPath));
     }
 
     private static ulong ResolveSaltSeed(ulong? saltSeed, string? saltText)
@@ -352,9 +383,13 @@ internal sealed record EmitterParametersDocument(
 internal sealed record CustomMutationParametersDocument(
     [property: JsonPropertyName("name")] string? Name,
     [property: JsonPropertyName("position")] string? Position,
-    [property: JsonPropertyName("parameters")] Dictionary<string, string>? Parameters);
+    [property: JsonPropertyName("parameters")] Dictionary<string, string>? Parameters,
+    [property: JsonPropertyName("pluginPath")] string? PluginPath,
+    [property: JsonPropertyName("typeName")] string? TypeName);
 
 internal sealed record CustomChunkMutationParametersDocument(
     [property: JsonPropertyName("name")] string? Name,
     [property: JsonPropertyName("position")] string? Position,
-    [property: JsonPropertyName("parameters")] Dictionary<string, string>? Parameters);
+    [property: JsonPropertyName("parameters")] Dictionary<string, string>? Parameters,
+    [property: JsonPropertyName("pluginPath")] string? PluginPath,
+    [property: JsonPropertyName("typeName")] string? TypeName);
