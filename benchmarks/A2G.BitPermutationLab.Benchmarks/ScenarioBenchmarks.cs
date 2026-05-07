@@ -8,11 +8,12 @@ namespace A2G.BitPermutationLab.Benchmarks;
 public sealed class ScenarioBenchmarks
 {
     private readonly CodecPipeline _pipeline = new();
+    internal static IReadOnlyList<ScenarioBenchmarkCase> CaseSource { get; set; } = Array.Empty<ScenarioBenchmarkCase>();
 
     [ParamsSource(nameof(Cases))]
     public ScenarioBenchmarkCase BenchmarkCase { get; set; } = null!;
 
-    public IEnumerable<ScenarioBenchmarkCase> Cases { get; set; } = Array.Empty<ScenarioBenchmarkCase>();
+    public IEnumerable<ScenarioBenchmarkCase> Cases => CaseSource;
 
     [Benchmark]
     public CodecResult Encode()

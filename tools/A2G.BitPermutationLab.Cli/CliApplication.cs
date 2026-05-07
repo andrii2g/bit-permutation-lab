@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Diagnostics;
 using A2G.BitPermutationLab.Benchmarking;
 using A2G.BitPermutationLab.Binary;
 using A2G.BitPermutationLab.Chunking;
@@ -127,6 +128,13 @@ public static class CliApplication
 
     private static int RunBenchmark(CliArguments arguments, TextWriter stdout, TextWriter stderr)
     {
+        BenchmarkModeKind modeKind = arguments.GetEnum("mode", BenchmarkModeKind.Quick, ParseBenchmarkModeKind);
+
+        if (modeKind == BenchmarkModeKind.BenchmarkDotNet)
+        {
+            return RunBenchmarkDotNet(arguments, stdout, stderr);
+        }
+
         if (arguments.Contains("weights-config"))
         {
             throw new CliUsageException("External weights config files are not implemented in this iteration.");
@@ -163,7 +171,6 @@ public static class CliApplication
             throw new CliUsageException("--iterations must be greater than zero.");
         }
 
-        BenchmarkModeKind modeKind = arguments.GetEnum("mode", BenchmarkModeKind.Quick, ParseBenchmarkModeKind);
         WeightingProfileKind weightingProfile = arguments.GetEnum("weighting-profile", DefaultWeightingProfile(profileKind), ParseWeightingProfileKind);
         int? scenarioBudget = arguments.GetOptionalInt("scenario-budget") ?? profileDefaults.ScenarioBudget;
         ulong samplingSeed = arguments.GetOptionalULong("sampling-seed") ?? profileDefaults.SamplingSeed;
@@ -186,6 +193,88 @@ public static class CliApplication
         WriteBenchmarkHeader(stdout, profileKind.ToString(), modeKind.ToString(), iterations, directExecution.Selection, top);
         WriteBenchmarkOutputs(result, stdout, arguments.GetOptionalString("output"), arguments.GetOptionalString("csv"), includeInvalid, top);
         return 0;
+    }
+
+    private static int RunBenchmarkDotNet(CliArguments arguments, TextWriter stdout, TextWriter stderr)
+    {
+        string benchmarkDll = ResolveBenchmarkProjectDll();
+        if (!File.Exists(benchmarkDll))
+        {
+            return Fail(stderr, $"BenchmarkDotNet runner assembly was not found at '{benchmarkDll}'. Build the benchmark project first.");
+        }
+
+        List<string> forwardedArguments =
+        [
+            QuoteArgument(benchmarkDll)
+        ];
+
+        AppendForwardedArgument(forwardedArguments, "profile", arguments.GetOptionalString("profile"));
+        AppendForwardedArgument(forwardedArguments, "mode", "benchmarkdotnet");
+        AppendForwardedArgument(forwardedArguments, "config", arguments.GetOptionalString("config"));
+        AppendForwardedArgument(forwardedArguments, "iterations", arguments.GetOptionalString("iterations"));
+        AppendForwardedArgument(forwardedArguments, "weighting-profile", arguments.GetOptionalString("weighting-profile"));
+        AppendForwardedArgument(forwardedArguments, "scenario-budget", arguments.GetOptionalString("scenario-budget"));
+        AppendForwardedArgument(forwardedArguments, "sampling-seed", arguments.GetOptionalString("sampling-seed"));
+        AppendForwardedArgument(forwardedArguments, "include-required-baselines", arguments.GetOptionalString("include-required-baselines"));
+        AppendForwardedArgument(forwardedArguments, "report-weighted", arguments.GetOptionalString("report-weighted"));
+        AppendForwardedArgument(forwardedArguments, "report-unweighted", arguments.GetOptionalString("report-unweighted"));
+        AppendForwardedArgument(forwardedArguments, "validate", arguments.GetOptionalString("validate"));
+        AppendForwardedArgument(forwardedArguments, "top", arguments.GetOptionalString("top"));
+        AppendForwardedArgument(forwardedArguments, "output", arguments.GetOptionalString("output"));
+        AppendForwardedArgument(forwardedArguments, "csv", arguments.GetOptionalString("csv"));
+
+        ProcessStartInfo startInfo = new()
+        {
+            FileName = "dotnet",
+            Arguments = string.Join(" ", forwardedArguments),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using Process process = Process.Start(startInfo)
+            ?? throw new CliUsageException("Failed to start BenchmarkDotNet runner process.");
+
+        string childStdout = process.StandardOutput.ReadToEnd();
+        string childStderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        if (!string.IsNullOrEmpty(childStdout))
+        {
+            stdout.Write(childStdout);
+        }
+
+        if (!string.IsNullOrEmpty(childStderr))
+        {
+            stderr.Write(childStderr);
+        }
+
+        return process.ExitCode;
+    }
+
+    private static string ResolveBenchmarkProjectDll()
+    {
+        return Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "benchmarks", "A2G.BitPermutationLab.Benchmarks", "bin", "Debug", "net10.0", "A2G.BitPermutationLab.Benchmarks.dll"));
+    }
+
+    private static void AppendForwardedArgument(List<string> args, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        args.Add($"--{key}");
+        args.Add(QuoteArgument(value));
+    }
+
+    private static string QuoteArgument(string value)
+    {
+        return value.Contains(' ') ? $"\"{value.Replace("\"", "\\\"")}\"" : value;
     }
 
     private static BenchmarkReportOptions CreateReportOptions(CliArguments arguments)

@@ -12,15 +12,12 @@ internal static class BenchmarkDotNetRunner
     public static Summary Run(IReadOnlyList<BenchmarkScenario> scenarios)
     {
         CodecPipeline pipeline = new();
-        ScenarioBenchmarks benchmarks = new()
-        {
-            Cases = CreateCases(scenarios, pipeline)
-        };
+        ScenarioBenchmarks.CaseSource = [.. CreateCases(scenarios, pipeline)];
 
         ManualConfig config = ManualConfig.Create(DefaultConfig.Instance)
             .AddJob(Job.Default.WithId("Default"));
 
-        return BenchmarkRunner.Run(benchmarks, config);
+        return BenchmarkDotNet.Running.BenchmarkRunner.Run<ScenarioBenchmarks>(config);
     }
 
     private static IEnumerable<ScenarioBenchmarkCase> CreateCases(IReadOnlyList<BenchmarkScenario> scenarios, CodecPipeline pipeline)
