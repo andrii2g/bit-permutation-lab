@@ -91,46 +91,37 @@ internal static class Program
     private static CodecParameters CreateParameters(CliArguments arguments)
     {
         ulong saltSeed = ResolveSaltSeed(arguments);
+        RejectUnsupportedAdvancedFlags(arguments);
 
         NumberKind numberKind = arguments.GetEnum("number-kind", NumberKind.UInt64, ParseNumberKind);
         int bitLength = arguments.GetRequiredInt("bits");
 
         BinaryParameters binary = new(
             BinaryKind.FixedUnsigned,
-            arguments.GetEnum("bit-order", BitOrderKind.MsbFirst, ParseBitOrderKind),
-            arguments.GetEnum("byte-order", ByteOrderKind.BigEndian, ParseByteOrderKind));
+            BitOrderKind.MsbFirst,
+            ByteOrderKind.BigEndian);
 
         MixerKind mixerKind = arguments.GetEnum("mix", MixerKind.None, ParseMixerKind);
         MixerParameters mixer = new(
             mixerKind,
-            arguments.GetEnum("mask-derivation", SaltDerivationKind.SplitMix64, ParseSaltDerivationKind),
-            arguments.GetOptionalULong("xor-mask"),
-            arguments.GetOptionalULong("addend"),
-            arguments.GetOptionalULong("multiplier"));
+            SaltDerivationKind.SplitMix64);
 
         PermutationKind permutationKind = arguments.GetEnum("permute", PermutationKind.Identity, ParsePermutationKind);
         PermutationParameters permutation = new(
             permutationKind,
-            arguments.GetOptionalInt("rotate-by"),
-            arguments.GetOptionalParsedValue("nibble-swap", ParseNibbleSwapKind),
-            arguments.GetOptionalInt("chunk-permute-group-size"),
-            arguments.GetOptionalParsedValue("chunk-permute-variant", ParseChunkPermutationVariant),
-            arguments.TryGetCsvInts("chunk-permute-order"),
-            arguments.GetOptionalInt("chunk-permute-rotate-by"),
-            arguments.GetOptionalInt("feistel-rounds"),
-            arguments.GetOptionalParsedValue("feistel-round-function", ParseFeistelRoundFunctionKind));
+            RotateBy: permutationKind == PermutationKind.Rotate ? 11 : null,
+            NibbleSwap: permutationKind == PermutationKind.NibbleSwap ? NibbleSwapKind.ReverseNibbles : null);
 
         ChunkingParameters chunking = new(
             ChunkerKind.Fixed,
             arguments.GetRequiredInt("chunk-size"),
-            arguments.GetEnum("chunk-read-order", BitOrderKind.MsbFirst, ParseBitOrderKind));
+            BitOrderKind.MsbFirst);
 
         EmitterKind emitterKind = arguments.GetEnum("emitter", EmitterKind.Hex16, ParseEmitterKind);
         EmitterParameters emitter = new(
             emitterKind,
             arguments.GetEnum("alphabet", DefaultAlphabetKind(emitterKind), ParseAlphabetKind),
             arguments.GetEnum("output-kind", DefaultOutputKind(emitterKind), ParseOutputKind),
-            arguments.GetOptionalString("custom-alphabet"),
             arguments.GetEnum("byte-array-format", ByteArrayTextFormat.Hex, ParseByteArrayTextFormat));
 
         return new CodecParameters(
@@ -193,6 +184,50 @@ internal static class Program
         }
     }
 
+    private static void RejectUnsupportedAdvancedFlags(CliArguments arguments)
+    {
+        string[] unsupportedFlags =
+        [
+            "bit-order",
+            "byte-order",
+            "mask-derivation",
+            "xor-mask",
+            "addend",
+            "multiplier",
+            "rotate-by",
+            "nibble-swap",
+            "chunk-permute-group-size",
+            "chunk-permute-variant",
+            "chunk-permute-order",
+            "chunk-permute-rotate-by",
+            "feistel-rounds",
+            "feistel-round-function",
+            "chunk-read-order",
+            "custom-alphabet",
+            "char-array"
+        ];
+
+        foreach (string flag in unsupportedFlags)
+        {
+            if (arguments.Contains(flag))
+            {
+                throw new CliUsageException($"Flag '--{flag}' is intentionally not exposed by the simplified CLI. Use code/library scenarios for advanced parameter control.");
+            }
+        }
+
+        PermutationKind permutationKind = arguments.GetEnum("permute", PermutationKind.Identity, ParsePermutationKind);
+        if (permutationKind is PermutationKind.ChunkPermutation or PermutationKind.Feistel)
+        {
+            throw new CliUsageException("The simplified CLI does not expose chunk permutation or Feistel scenarios. Use code/library scenarios for those cases.");
+        }
+
+        EmitterKind emitterKind = arguments.GetEnum("emitter", EmitterKind.Hex16, ParseEmitterKind);
+        if (emitterKind == EmitterKind.CustomAlphabet)
+        {
+            throw new CliUsageException("The simplified CLI does not expose custom alphabets. Use code/library scenarios for those cases.");
+        }
+    }
+
     private static string FormatByteArray(byte[] bytes, ByteArrayTextFormat format)
     {
         return format switch
@@ -225,20 +260,6 @@ internal static class Program
         _ => throw new CliUsageException($"Unsupported number kind '{value}'.")
     };
 
-    private static BitOrderKind ParseBitOrderKind(string value) => value.ToLowerInvariant() switch
-    {
-        "msb" => BitOrderKind.MsbFirst,
-        "lsb" => BitOrderKind.LsbFirst,
-        _ => throw new CliUsageException($"Unsupported bit order '{value}'.")
-    };
-
-    private static ByteOrderKind ParseByteOrderKind(string value) => value.ToLowerInvariant() switch
-    {
-        "big" => ByteOrderKind.BigEndian,
-        "little" => ByteOrderKind.LittleEndian,
-        _ => throw new CliUsageException($"Unsupported byte order '{value}'.")
-    };
-
     private static MixerKind ParseMixerKind(string value) => value.ToLowerInvariant() switch
     {
         "none" => MixerKind.None,
@@ -246,14 +267,6 @@ internal static class Program
         "add" => MixerKind.Add,
         "multiply" => MixerKind.Multiply,
         _ => throw new CliUsageException($"Unsupported mixer kind '{value}'.")
-    };
-
-    private static SaltDerivationKind ParseSaltDerivationKind(string value) => value.ToLowerInvariant() switch
-    {
-        "none" => SaltDerivationKind.None,
-        "direct" => SaltDerivationKind.UseSaltSeedDirectly,
-        "splitmix64" => SaltDerivationKind.SplitMix64,
-        _ => throw new CliUsageException($"Unsupported salt derivation '{value}'.")
     };
 
     private static PermutationKind ParsePermutationKind(string value) => value.ToLowerInvariant() switch
@@ -267,31 +280,6 @@ internal static class Program
         "chunk" => PermutationKind.ChunkPermutation,
         "feistel" => PermutationKind.Feistel,
         _ => throw new CliUsageException($"Unsupported permutation kind '{value}'.")
-    };
-
-    private static NibbleSwapKind ParseNibbleSwapKind(string value) => value.ToLowerInvariant() switch
-    {
-        "reverse" => NibbleSwapKind.ReverseNibbles,
-        "swap-adjacent" => NibbleSwapKind.SwapAdjacentNibbles,
-        _ => throw new CliUsageException($"Unsupported nibble-swap mode '{value}'.")
-    };
-
-    private static ChunkPermutationVariant ParseChunkPermutationVariant(string value) => value.ToLowerInvariant() switch
-    {
-        "explicit" => ChunkPermutationVariant.ExplicitOrder,
-        "reverse" => ChunkPermutationVariant.ReverseGroups,
-        "rotate-left" => ChunkPermutationVariant.RotateGroupsLeft,
-        "rotate-right" => ChunkPermutationVariant.RotateGroupsRight,
-        "swap-adjacent" => ChunkPermutationVariant.SwapAdjacentGroups,
-        "salt-shuffle" => ChunkPermutationVariant.SaltShuffle,
-        _ => throw new CliUsageException($"Unsupported chunk permutation variant '{value}'.")
-    };
-
-    private static FeistelRoundFunctionKind ParseFeistelRoundFunctionKind(string value) => value.ToLowerInvariant() switch
-    {
-        "xorshift-add" => FeistelRoundFunctionKind.XorShiftAdd,
-        "multiply-xor" => FeistelRoundFunctionKind.MultiplyXor,
-        _ => throw new CliUsageException($"Unsupported Feistel round function '{value}'.")
     };
 
     private static EmitterKind ParseEmitterKind(string value) => value.ToLowerInvariant() switch
@@ -371,8 +359,17 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.Error.WriteLine("Usage:");
-        Console.Error.WriteLine("  bpl encode --value <number> [scenario flags]");
-        Console.Error.WriteLine("  bpl decode --value <text-or-byte-array> [scenario flags]");
+        Console.Error.WriteLine("  bpl encode --value <number> --bits <n> --chunk-size <n> --mix <kind> --permute <kind> --emitter <kind> [common flags]");
+        Console.Error.WriteLine("  bpl decode --value <text-or-byte-array> --bits <n> --chunk-size <n> --mix <kind> --permute <kind> --emitter <kind> [common flags]");
+        Console.Error.WriteLine("Common flags:");
+        Console.Error.WriteLine("  --number-kind uint32|uint64");
+        Console.Error.WriteLine("  --salt <ulong> | --salt-text <text>");
+        Console.Error.WriteLine("  --alphabet none|hex16|base32-crockford|base64url");
+        Console.Error.WriteLine("  --output-kind string|byte-array");
+        Console.Error.WriteLine("  --byte-array-format hex|base64|csv-decimal");
+        Console.Error.WriteLine("Notes:");
+        Console.Error.WriteLine("  Advanced permutation/mutation/scenario shaping flags are intentionally not exposed by the simplified CLI.");
+        Console.Error.WriteLine("  Use the library/code path for benchmarks and advanced scenarios.");
     }
 }
 
@@ -485,36 +482,9 @@ internal sealed class CliArguments
         throw new CliUsageException($"Flag '--{key}' requires an unsigned integer value.");
     }
 
-    public int[]? TryGetCsvInts(string key)
-    {
-        if (!_values.TryGetValue(key, out string? value))
-        {
-            return null;
-        }
-
-        return value
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(part =>
-            {
-                if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
-                {
-                    return parsed;
-                }
-
-                throw new CliUsageException($"Flag '--{key}' requires a comma-separated integer list.");
-            })
-            .ToArray();
-    }
-
     public TEnum GetEnum<TEnum>(string key, TEnum defaultValue, Func<string, TEnum> parser)
     {
         return _values.TryGetValue(key, out string? value) ? parser(value) : defaultValue;
-    }
-
-    public T? GetOptionalParsedValue<T>(string key, Func<string, T> parser)
-        where T : struct
-    {
-        return _values.TryGetValue(key, out string? value) ? parser(value) : null;
     }
 }
 
