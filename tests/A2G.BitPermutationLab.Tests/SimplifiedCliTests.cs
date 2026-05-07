@@ -1,5 +1,7 @@
 using System.Text;
 using A2G.BitPermutationLab.Cli;
+using A2G.BitPermutationLab.Core;
+using A2G.BitPermutationLab.Custom;
 
 namespace A2G.BitPermutationLab.Tests;
 
@@ -58,7 +60,7 @@ public sealed class SimplifiedCliTests
     }
 
     [Fact]
-    public void Rejects_AdvancedRotateByFlag()
+    public void Supports_AdvancedRotateByFlag()
     {
         var stdout = new StringWriter(new StringBuilder());
         var stderr = new StringWriter(new StringBuilder());
@@ -77,12 +79,13 @@ public sealed class SimplifiedCliTests
             "--emitter", "hex16"
         ], stdout, stderr);
 
-        Assert.Equal(1, exitCode);
-        Assert.Contains("intentionally not exposed", stderr.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Encoded:", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
     }
 
     [Fact]
-    public void Rejects_FeistelScenario_OnSimplifiedCli()
+    public void Supports_FeistelScenario_OnCli()
     {
         var stdout = new StringWriter(new StringBuilder());
         var stderr = new StringWriter(new StringBuilder());
@@ -96,12 +99,15 @@ public sealed class SimplifiedCliTests
             "--salt", "42",
             "--mix", "xor",
             "--permute", "feistel",
+            "--feistel-rounds", "2",
+            "--feistel-round-function", "xorshift-add",
             "--chunk-size", "4",
             "--emitter", "hex16"
         ], stdout, stderr);
 
-        Assert.Equal(1, exitCode);
-        Assert.Contains("does not expose chunk permutation or Feistel", stderr.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Encoded:", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
     }
 
     [Fact]
@@ -232,6 +238,166 @@ public sealed class SimplifiedCliTests
         Assert.Contains("ScenarioBudget: 4", stdout.ToString());
         Assert.Contains("SamplingSeed: 77", stdout.ToString());
         Assert.Contains("IncludeRequiredBaselines: False", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Encode_Supports_CustomAlphabet_And_CharArray_Output()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "encode",
+            "--value", "12345",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "0",
+            "--mix", "none",
+            "--permute", "identity",
+            "--chunk-size", "4",
+            "--emitter", "custom",
+            "--alphabet", "custom",
+            "--custom-alphabet", "ABCDEFGHIJKLMNOP",
+            "--output-kind", "char-array"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Encoded:", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Encode_Supports_RegisteredCustomMutation()
+    {
+        string mutationName = $"xor-flip-{Guid.NewGuid():N}";
+        CustomMutationRegistry.Register(new DelegateMutation(
+            mutationName,
+            static (value, parameters) => value ^ 0x00FF00FFUL,
+            static (value, parameters) => value ^ 0x00FF00FFUL));
+
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "encode",
+            "--value", "12345",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "42",
+            "--mix", "xor",
+            "--permute", "rotate",
+            "--rotate-by", "7",
+            "--chunk-size", "4",
+            "--emitter", "hex16",
+            "--alphabet", "hex16",
+            "--custom-mutation-name", mutationName,
+            "--custom-mutation-position", "after-mix",
+            "--custom-mutation-param", "note=test"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Encoded:", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Encode_CanLoad_CustomMutationPlugin()
+    {
+        string mutationName = $"plugin-mutation-{Guid.NewGuid():N}";
+        string pluginPath = typeof(PluginXorMutation).Assembly.Location;
+        string pluginType = typeof(PluginXorMutation).FullName!;
+
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "encode",
+            "--value", "12345",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "42",
+            "--mix", "xor",
+            "--permute", "rotate",
+            "--rotate-by", "7",
+            "--chunk-size", "4",
+            "--emitter", "hex16",
+            "--alphabet", "hex16",
+            "--custom-mutation-name", mutationName,
+            "--custom-mutation-position", "after-mix",
+            "--custom-mutation-plugin", pluginPath,
+            "--custom-mutation-type", pluginType
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Encoded:", stdout.ToString());
+        Assert.True(CustomMutationRegistry.TryGetMutation(mutationName, out _));
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Encode_CanLoad_CustomChunkMutationPlugin()
+    {
+        string mutationName = $"plugin-chunk-{Guid.NewGuid():N}";
+        string pluginPath = typeof(PluginReverseChunkMutation).Assembly.Location;
+        string pluginType = typeof(PluginReverseChunkMutation).FullName!;
+
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "encode",
+            "--value", "12345",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "42",
+            "--mix", "xor",
+            "--permute", "rotate",
+            "--rotate-by", "7",
+            "--chunk-size", "4",
+            "--emitter", "hex16",
+            "--alphabet", "hex16",
+            "--custom-chunk-mutation-name", mutationName,
+            "--custom-chunk-mutation-position", "before-emit",
+            "--custom-chunk-mutation-plugin", pluginPath,
+            "--custom-chunk-mutation-type", pluginType
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Encoded:", stdout.ToString());
+        Assert.True(CustomMutationRegistry.TryGetChunkMutation(mutationName, out _));
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Benchmark_Supports_DirectSingleScenario_Mode()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "benchmark",
+            "--iterations", "5",
+            "--number-kind", "uint32",
+            "--bits", "32",
+            "--salt", "42",
+            "--mix", "xor",
+            "--permute", "rotate",
+            "--rotate-by", "11",
+            "--chunk-size", "4",
+            "--emitter", "hex16",
+            "--alphabet", "hex16",
+            "--value-set", "middle"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Profile: Direct", stdout.ToString());
+        Assert.Contains("Raw Performance Matrix", stdout.ToString());
         Assert.Equal(string.Empty, stderr.ToString());
     }
 
