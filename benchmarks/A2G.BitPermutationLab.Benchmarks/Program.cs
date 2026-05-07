@@ -11,7 +11,7 @@ internal static class Program
         BenchmarkRunResult result;
         if (!string.IsNullOrWhiteSpace(options.ConfigPath))
         {
-            LoadedBenchmarkConfig loaded = BenchmarkConfigLoader.Load(options.ConfigPath);
+            LoadedBenchmarkConfig loaded = BenchmarkConfigLoader.Load(options.ConfigPath, options.WeightsConfigPath);
             BenchmarkExecutionOptions execution = loaded.Options with
             {
                 Iterations = options.Iterations ?? loaded.Options.Iterations,
@@ -62,13 +62,15 @@ internal static class Program
             options.Profile.ToString(),
             options.Mode.ToString(),
             options.Iterations ?? 10_000,
-            new BenchmarkSelectionOptions(options.WeightingProfile, options.ScenarioBudget, options.SamplingSeed, options.IncludeRequiredBaselines),
+            BenchmarkProfileFactory.ApplySelectionOverrides(
+                new BenchmarkSelectionOptions(options.WeightingProfile, options.ScenarioBudget, options.SamplingSeed, options.IncludeRequiredBaselines),
+                LoadWeightingOverrides(options.WeightsConfigPath)),
             new BenchmarkReportOptions(options.ReportWeighted, options.ReportUnweighted),
             options.Validate ?? true);
 
         if (options.Mode == BenchmarkModeKind.BenchmarkDotNet)
         {
-            IReadOnlyList<BenchmarkScenario> scenarios = BenchmarkProfileFactory.Create(directExecution.Selection);
+            IReadOnlyList<BenchmarkScenario> scenarios = BenchmarkProfileFactory.Create(directExecution.Selection, LoadWeightingOverrides(options.WeightsConfigPath));
             var summary = BenchmarkDotNetRunner.Run(scenarios);
             BenchmarkRunResult benchmarkDotNetResult = BenchmarkDotNetSummaryConverter.Convert(
                 summary,
@@ -87,7 +89,7 @@ internal static class Program
             return 0;
         }
 
-        result = BenchmarkRunner.RunDetailed(directExecution);
+        result = BenchmarkRunner.RunDetailed(BenchmarkProfileFactory.Create(directExecution.Selection, LoadWeightingOverrides(options.WeightsConfigPath)), directExecution);
         Console.WriteLine($"Benchmark profile: {options.Profile}");
         Console.WriteLine($"Benchmark mode: {options.Mode}");
         Console.WriteLine($"Weighting profile: {options.WeightingProfile}");
@@ -137,6 +139,13 @@ internal static class Program
             Directory.CreateDirectory(directory);
         }
     }
+
+    private static WeightingOverrides LoadWeightingOverrides(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path)
+            ? WeightingOverrides.Empty
+            : BenchmarkWeightingConfigLoader.Load(path);
+    }
 }
 
 internal sealed record BenchmarkCommandLine(
@@ -153,7 +162,8 @@ internal sealed record BenchmarkCommandLine(
     int Top,
     string? OutputMarkdown,
     string? OutputCsv,
-    string? ConfigPath)
+    string? ConfigPath,
+    string? WeightsConfigPath)
 {
     public static BenchmarkCommandLine Parse(string[] args)
     {
@@ -171,6 +181,7 @@ internal sealed record BenchmarkCommandLine(
         string? outputMarkdown = null;
         string? outputCsv = null;
         string? configPath = null;
+        string? weightsConfigPath = null;
 
         int index = 0;
         if (args.Length > 0 && !args[0].StartsWith("--", StringComparison.Ordinal))
@@ -241,6 +252,9 @@ internal sealed record BenchmarkCommandLine(
                 case "config":
                     configPath = value;
                     break;
+                case "weights-config":
+                    weightsConfigPath = value;
+                    break;
                 default:
                     throw new ArgumentException($"Unsupported benchmark argument '--{key}'.");
             }
@@ -256,7 +270,7 @@ internal sealed record BenchmarkCommandLine(
             throw new ArgumentException("Iterations must be greater than zero.");
         }
 
-        return new BenchmarkCommandLine(profile, mode, weightingProfile, iterations, scenarioBudget, samplingSeed, includeRequiredBaselines, reportWeighted, reportUnweighted, validate, top, outputMarkdown, outputCsv, configPath);
+        return new BenchmarkCommandLine(profile, mode, weightingProfile, iterations, scenarioBudget, samplingSeed, includeRequiredBaselines, reportWeighted, reportUnweighted, validate, top, outputMarkdown, outputCsv, configPath, weightsConfigPath);
     }
 
     private static BenchmarkProfileKind ParseProfile(string value) => value.ToLowerInvariant() switch

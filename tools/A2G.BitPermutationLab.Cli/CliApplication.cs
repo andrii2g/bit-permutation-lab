@@ -125,18 +125,14 @@ public static class CliApplication
             return RunBenchmarkDotNet(arguments, stdout, stderr);
         }
 
-        if (arguments.Contains("weights-config"))
-        {
-            throw new CliUsageException("External weights config files are not implemented in this iteration.");
-        }
-
         BenchmarkReportOptions report = CreateReportOptions(arguments);
         bool includeInvalid = arguments.GetOptionalBool("include-invalid") ?? true;
         int top = arguments.GetOptionalInt("top") ?? 5;
+        WeightingOverrides overrides = LoadWeightingOverrides(arguments);
 
         if (arguments.Contains("config"))
         {
-            LoadedBenchmarkConfig loaded = BenchmarkConfigLoader.Load(arguments.GetRequiredString("config"));
+            LoadedBenchmarkConfig loaded = BenchmarkConfigLoader.Load(arguments.GetRequiredString("config"), arguments.GetOptionalString("weights-config"));
             BenchmarkExecutionOptions execution = loaded.Options with
             {
                 Iterations = arguments.GetOptionalInt("iterations") ?? loaded.Options.Iterations,
@@ -173,16 +169,20 @@ public static class CliApplication
         ulong samplingSeed = arguments.GetOptionalULong("sampling-seed") ?? profileDefaults.SamplingSeed;
         bool includeRequiredBaselines = arguments.GetOptionalBool("include-required-baselines") ?? true;
 
+        BenchmarkSelectionOptions selection = BenchmarkProfileFactory.ApplySelectionOverrides(
+            new BenchmarkSelectionOptions(weightingProfile, scenarioBudget, samplingSeed, includeRequiredBaselines),
+            overrides);
+
         BenchmarkExecutionOptions directExecution = new(
             profileKind.ToString(),
             BenchmarkModeKind.Quick.ToString(),
             iterations,
-            new BenchmarkSelectionOptions(weightingProfile, scenarioBudget, samplingSeed, includeRequiredBaselines),
+            selection,
             report,
             arguments.GetOptionalBool("validate") ?? true);
 
         IReadOnlyList<BenchmarkScenario> directScenarios = ApplyValueSet(
-            BenchmarkProfileFactory.Create(directExecution.Selection),
+            BenchmarkProfileFactory.Create(directExecution.Selection, overrides),
             arguments.GetOptionalString("value-set"),
             BenchmarkValueSetKind.Default);
 
@@ -250,6 +250,7 @@ public static class CliApplication
         AppendForwardedArgument(forwardedArguments, "weighting-profile", arguments.GetOptionalString("weighting-profile"));
         AppendForwardedArgument(forwardedArguments, "scenario-budget", arguments.GetOptionalString("scenario-budget"));
         AppendForwardedArgument(forwardedArguments, "sampling-seed", arguments.GetOptionalString("sampling-seed"));
+        AppendForwardedArgument(forwardedArguments, "weights-config", arguments.GetOptionalString("weights-config"));
         AppendForwardedArgument(forwardedArguments, "include-required-baselines", arguments.GetOptionalString("include-required-baselines"));
         AppendForwardedArgument(forwardedArguments, "report-weighted", arguments.GetOptionalString("report-weighted"));
         AppendForwardedArgument(forwardedArguments, "report-unweighted", arguments.GetOptionalString("report-unweighted"));
@@ -308,6 +309,14 @@ public static class CliApplication
         }
 
         return new BenchmarkReportOptions(includeWeightedReport, includeUnweightedReport);
+    }
+
+    private static WeightingOverrides LoadWeightingOverrides(CliArguments arguments)
+    {
+        string? path = arguments.GetOptionalString("weights-config");
+        return string.IsNullOrWhiteSpace(path)
+            ? WeightingOverrides.Empty
+            : BenchmarkWeightingConfigLoader.Load(path);
     }
 
     private static IReadOnlyList<BenchmarkScenario> ApplyValueSet(
@@ -1040,6 +1049,7 @@ public static class CliApplication
         stderr.WriteLine("  --custom-chunk-mutation-plugin <assembly.dll> --custom-chunk-mutation-type <full.type.Name>");
         stderr.WriteLine("Notes:");
         stderr.WriteLine("  Benchmark weighting profiles: smoke, speed-first, balanced, exploratory, exhaustive.");
+        stderr.WriteLine("  --weights-config <path> can override built-in mixer, permutation, and emitter weights.");
         stderr.WriteLine("  Benchmark value sets: default, small, middle, large, max.");
         stderr.WriteLine("  Plugin-loaded custom mutations must come from a public parameterless type implementing ICustomMutation or ICustomChunkMutation.");
     }

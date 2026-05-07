@@ -19,16 +19,24 @@ public static class BenchmarkConfigLoader
         AllowTrailingCommas = true
     };
 
-    public static LoadedBenchmarkConfig Load(string path)
+    public static LoadedBenchmarkConfig Load(string path, string? weightsConfigPath = null)
     {
         string baseDirectory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? Directory.GetCurrentDirectory();
         BenchmarkConfigDocument document = JsonSerializer.Deserialize<BenchmarkConfigDocument>(File.ReadAllText(path), JsonOptions)
             ?? throw new InvalidOperationException("Benchmark config could not be parsed.");
+        WeightingOverrides overrides = document.Weighting is null
+            ? WeightingOverrides.Empty
+            : BenchmarkWeightingConfigLoader.ToOverrides(document.Weighting);
+
+        if (!string.IsNullOrWhiteSpace(weightsConfigPath))
+        {
+            overrides = overrides.Merge(BenchmarkWeightingConfigLoader.Load(weightsConfigPath));
+        }
 
         List<BenchmarkScenario> scenarios = [];
         foreach (BenchmarkScenarioDocument scenario in document.Scenarios ?? [])
         {
-            scenarios.Add(ToScenario(scenario, baseDirectory));
+            scenarios.Add(ToScenario(scenario, baseDirectory, overrides));
         }
 
         BenchmarkExecutionDocument benchmark = document.Benchmark ?? new BenchmarkExecutionDocument();
@@ -44,11 +52,11 @@ public static class BenchmarkConfigLoader
             mode.ToString(),
             iterations,
             new BenchmarkSelectionOptions(
-                WeightingProfileKind.Balanced,
-                null,
-                0UL,
-                true),
-            BenchmarkReportOptions.Default,
+                overrides.Profile ?? WeightingProfileKind.Balanced,
+                overrides.ScenarioBudget,
+                overrides.SamplingSeed ?? 0UL,
+                overrides.IncludeRequiredBaselines ?? true),
+            new BenchmarkReportOptions(true, overrides.IncludeRawUnweightedReport ?? true),
             benchmark.Validate ?? true);
 
         return new LoadedBenchmarkConfig(
@@ -61,7 +69,7 @@ public static class BenchmarkConfigLoader
             benchmark.Top ?? 5);
     }
 
-    private static BenchmarkScenario ToScenario(BenchmarkScenarioDocument document, string baseDirectory)
+    private static BenchmarkScenario ToScenario(BenchmarkScenarioDocument document, string baseDirectory, WeightingOverrides overrides)
     {
         if (document.Parameters is null)
         {
@@ -74,20 +82,50 @@ public static class BenchmarkConfigLoader
             : BenchmarkProfileFactory.GetValues(ValueRangeKind.Small);
 
         ValueRangeKind rangeKind = InferValueRange(values);
-        ScenarioWeights weights = new(
-            1.00,
-            1.00,
-            GetValueRangeWeight(rangeKind),
-            1.00,
-            parameters.CustomMutation is null && parameters.CustomChunkMutation is null ? 1.00 : 1.20,
-            1.00,
-            GetValueRangeWeight(rangeKind),
-            false);
+        ScenarioWeights weights = CreateScenarioWeights(parameters, rangeKind, overrides);
 
         string scenarioName = document.Name ?? parameters.Name;
         string scenarioId = $"{scenarioName}:{rangeKind.ToString().ToLowerInvariant()}";
 
-        return new BenchmarkScenario(scenarioId, scenarioName, parameters with { Name = scenarioName }, rangeKind, values, weights);
+        return new BenchmarkScenario(scenarioId, scenarioName, parameters with { Name = scenarioName }, ParameterTierKind.Explicit, rangeKind, values, weights);
+    }
+
+    private static ScenarioWeights CreateScenarioWeights(CodecParameters parameters, ValueRangeKind rangeKind, WeightingOverrides overrides)
+    {
+        double algorithmWeight = 1.00;
+        double expectedCostFactor = 1.00;
+        double emitterWeight = 1.00;
+        double parameterTierWeight = 1.00;
+        double valueRangeWeight = GetValueRangeWeight(rangeKind);
+        double customMutationWeight = parameters.CustomMutation is null && parameters.CustomChunkMutation is null ? 1.00 : 1.20;
+
+        if (overrides.MixerOverrides.TryGetValue(parameters.Mixer.Kind.ToString(), out WeightOverrideValues? mixerOverride))
+        {
+            algorithmWeight = mixerOverride.AlgorithmWeight ?? algorithmWeight;
+            expectedCostFactor = mixerOverride.ExpectedCostFactor ?? expectedCostFactor;
+        }
+
+        if (overrides.PermutationOverrides.TryGetValue(parameters.Permutation.Kind.ToString(), out WeightOverrideValues? permutationOverride))
+        {
+            algorithmWeight = permutationOverride.AlgorithmWeight ?? algorithmWeight;
+            expectedCostFactor = permutationOverride.ExpectedCostFactor ?? expectedCostFactor;
+        }
+
+        if (overrides.EmitterOverrides.TryGetValue(parameters.Emitter.Kind.ToString(), out WeightOverrideValues? emitterOverride))
+        {
+            emitterWeight = emitterOverride.AlgorithmWeight ?? emitterWeight;
+            expectedCostFactor = emitterOverride.ExpectedCostFactor ?? expectedCostFactor;
+        }
+
+        return new ScenarioWeights(
+            algorithmWeight,
+            parameterTierWeight,
+            valueRangeWeight,
+            emitterWeight,
+            customMutationWeight,
+            expectedCostFactor,
+            algorithmWeight * parameterTierWeight * valueRangeWeight * emitterWeight * customMutationWeight / expectedCostFactor,
+            false);
     }
 
     private static CodecParameters ToParameters(string? scenarioName, CodecParametersDocument document, string baseDirectory)
@@ -314,7 +352,8 @@ public sealed record LoadedBenchmarkConfig(
 
 internal sealed record BenchmarkConfigDocument(
     [property: JsonPropertyName("scenarios")] List<BenchmarkScenarioDocument>? Scenarios,
-    [property: JsonPropertyName("benchmark")] BenchmarkExecutionDocument? Benchmark);
+    [property: JsonPropertyName("benchmark")] BenchmarkExecutionDocument? Benchmark,
+    [property: JsonPropertyName("weighting")] WeightingDocument? Weighting);
 
 internal sealed record BenchmarkScenarioDocument(
     [property: JsonPropertyName("name")] string? Name,

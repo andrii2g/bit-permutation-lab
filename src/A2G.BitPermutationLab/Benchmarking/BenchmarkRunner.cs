@@ -79,16 +79,35 @@ public static class BenchmarkRunner
                         options.ModeLabel,
                         scenario.ScenarioId,
                         scenario.Name,
+                        scenario.Parameters.NumberKind,
+                        scenario.Parameters.Binary.Kind,
+                        scenario.Parameters.Binary.BitOrder,
+                        scenario.Parameters.Binary.ByteOrder,
                         scenario.ValueRangeKind,
+                        scenario.ParameterTier,
+                        scenario.Parameters.SaltSeed,
                         scenario.Weights.SelectionWeight,
+                        scenario.Weights.AlgorithmWeight,
+                        scenario.Weights.ParameterTierWeight,
+                        scenario.Weights.ValueRangeWeight,
+                        scenario.Weights.EmitterWeight,
+                        scenario.Weights.CustomMutationWeight,
                         scenario.Weights.ExpectedCostFactor,
                         scenario.Weights.IsRequiredBaseline,
                         scenario.Parameters.BitLength,
+                        FormatMixerParameters(scenario.Parameters),
                         scenario.Parameters.Mixer.Kind,
+                        FormatPermutationParameters(scenario.Parameters),
                         scenario.Parameters.Permutation.Kind,
+                        scenario.Parameters.Chunking.Kind,
                         scenario.Parameters.Chunking.ChunkSize,
                         scenario.Parameters.Emitter.Kind,
+                        scenario.Parameters.Emitter.AlphabetKind,
                         scenario.Parameters.Emitter.OutputKind,
+                        scenario.Parameters.CustomChunkMutation?.Name ?? scenario.Parameters.CustomMutation?.Name ?? "None",
+                        scenario.Parameters.CustomChunkMutation is not null
+                            ? scenario.Parameters.CustomChunkMutation.Position.ToString()
+                            : scenario.Parameters.CustomMutation?.Position.ToString() ?? "None",
                         value,
                         encoded.OutputLength,
                         encodeNs,
@@ -156,5 +175,33 @@ public static class BenchmarkRunner
             OutputKind.ByteArray => Convert.ToHexString(encoded.ByteArrayValue ?? Array.Empty<byte>()),
             _ => string.Empty
         };
+    }
+
+    private static string FormatMixerParameters(CodecParameters parameters)
+    {
+        return parameters.Mixer.Kind switch
+        {
+            MixerKind.Xor => $"maskDerivation={parameters.Mixer.MaskDerivation}, literalMask={parameters.Mixer.LiteralMask?.ToString() ?? "-"}",
+            MixerKind.Add => $"maskDerivation={parameters.Mixer.MaskDerivation}, literalAddend={parameters.Mixer.LiteralAddend?.ToString() ?? "-"}",
+            MixerKind.Multiply => $"multiplier={parameters.Mixer.Multiplier?.ToString() ?? "-"}",
+            _ => "-"
+        };
+    }
+
+    private static string FormatPermutationParameters(CodecParameters parameters)
+    {
+        return parameters.Permutation.Kind switch
+        {
+            PermutationKind.Rotate => $"rotateBy={parameters.Permutation.RotateBy}",
+            PermutationKind.NibbleSwap => $"nibbleSwap={parameters.Permutation.NibbleSwap}",
+            PermutationKind.ChunkPermutation => $"groupSize={parameters.Permutation.ChunkPermutationGroupSize}, variant={parameters.Permutation.ChunkPermutationVariant}, rotateBy={parameters.Permutation.ChunkPermutationRotateBy}, order={FormatOrder(parameters.Permutation.ChunkPermutationOrder)}",
+            PermutationKind.Feistel => $"rounds={parameters.Permutation.FeistelRounds}, function={parameters.Permutation.FeistelRoundFunction}",
+            _ => "-"
+        };
+    }
+
+    private static string FormatOrder(IReadOnlyList<int>? order)
+    {
+        return order is null || order.Count == 0 ? "-" : string.Join(",", order);
     }
 }

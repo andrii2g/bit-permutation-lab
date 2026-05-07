@@ -103,16 +103,39 @@ internal static class BenchmarkDotNetSummaryConverter
                 options.ModeLabel,
                 ScenarioCase.ScenarioId,
                 ScenarioCase.ScenarioName,
+                ScenarioCase.Parameters.NumberKind,
+                ScenarioCase.Parameters.Binary.Kind,
+                ScenarioCase.Parameters.Binary.BitOrder,
+                ScenarioCase.Parameters.Binary.ByteOrder,
                 ScenarioCase.ValueRangeKind,
+                ParameterTierKind.Explicit,
+                ScenarioCase.Parameters.SaltSeed,
                 ScenarioCase.SelectionWeight,
+                ScenarioCase.SelectionWeight,
+                1.00,
+                ScenarioCase.ValueRangeKind switch
+                {
+                    ValueRangeKind.Tiny => 0.50,
+                    _ => 1.00
+                },
+                1.00,
+                ScenarioCase.Parameters.CustomMutation is null && ScenarioCase.Parameters.CustomChunkMutation is null ? 1.00 : 1.20,
                 ScenarioCase.ExpectedCostFactor,
                 ScenarioCase.IsRequiredBaseline,
                 ScenarioCase.Parameters.BitLength,
+                FormatMixerParameters(ScenarioCase.Parameters),
                 ScenarioCase.Parameters.Mixer.Kind,
+                FormatPermutationParameters(ScenarioCase.Parameters),
                 ScenarioCase.Parameters.Permutation.Kind,
+                ScenarioCase.Parameters.Chunking.Kind,
                 ScenarioCase.Parameters.Chunking.ChunkSize,
                 ScenarioCase.Parameters.Emitter.Kind,
+                ScenarioCase.Parameters.Emitter.AlphabetKind,
                 ScenarioCase.Parameters.Emitter.OutputKind,
+                ScenarioCase.Parameters.CustomChunkMutation?.Name ?? ScenarioCase.Parameters.CustomMutation?.Name ?? "None",
+                ScenarioCase.Parameters.CustomChunkMutation is not null
+                    ? ScenarioCase.Parameters.CustomChunkMutation.Position.ToString()
+                    : ScenarioCase.Parameters.CustomMutation?.Position.ToString() ?? "None",
                 ScenarioCase.InputValue,
                 ScenarioCase.Encoded.OutputLength,
                 EncodeNanoseconds,
@@ -134,6 +157,34 @@ internal static class BenchmarkDotNetSummaryConverter
                 OutputKind.ByteArray => System.Convert.ToHexString(encoded.ByteArrayValue ?? Array.Empty<byte>()),
                 _ => string.Empty
             };
+        }
+
+        private static string FormatMixerParameters(CodecParameters parameters)
+        {
+            return parameters.Mixer.Kind switch
+            {
+                MixerKind.Xor => $"maskDerivation={parameters.Mixer.MaskDerivation}, literalMask={parameters.Mixer.LiteralMask?.ToString() ?? "-"}",
+                MixerKind.Add => $"maskDerivation={parameters.Mixer.MaskDerivation}, literalAddend={parameters.Mixer.LiteralAddend?.ToString() ?? "-"}",
+                MixerKind.Multiply => $"multiplier={parameters.Mixer.Multiplier?.ToString() ?? "-"}",
+                _ => "-"
+            };
+        }
+
+        private static string FormatPermutationParameters(CodecParameters parameters)
+        {
+            return parameters.Permutation.Kind switch
+            {
+                PermutationKind.Rotate => $"rotateBy={parameters.Permutation.RotateBy}",
+                PermutationKind.NibbleSwap => $"nibbleSwap={parameters.Permutation.NibbleSwap}",
+                PermutationKind.ChunkPermutation => $"groupSize={parameters.Permutation.ChunkPermutationGroupSize}, variant={parameters.Permutation.ChunkPermutationVariant}, rotateBy={parameters.Permutation.ChunkPermutationRotateBy}, order={FormatOrder(parameters.Permutation.ChunkPermutationOrder)}",
+                PermutationKind.Feistel => $"rounds={parameters.Permutation.FeistelRounds}, function={parameters.Permutation.FeistelRoundFunction}",
+                _ => "-"
+            };
+        }
+
+        private static string FormatOrder(IReadOnlyList<int>? order)
+        {
+            return order is null || order.Count == 0 ? "-" : string.Join(",", order);
         }
     }
 }
