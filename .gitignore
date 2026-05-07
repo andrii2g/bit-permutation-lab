@@ -1,0 +1,8 @@
+bin/
+obj/
+.vs/
+.vscode/
+TestResults/
+BenchmarkDotNet.Artifacts/
+*.user
+*.suo
