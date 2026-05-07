@@ -14,12 +14,27 @@ public static class BenchmarkProfileFactory
         return Create(CreateSelectionOptions(profileKind));
     }
 
+    public static IReadOnlyList<BenchmarkScenario> Create(BenchmarkSelectionOptions options, WeightingOverrides overrides)
+    {
+        return BenchmarkScenarioSelector.Select(CreateCandidates(overrides), ApplySelectionOverrides(options, overrides));
+    }
+
     public static IReadOnlyList<BenchmarkScenario> Create(BenchmarkSelectionOptions options)
     {
         return BenchmarkScenarioSelector.Select(CreateCandidates(), options);
     }
 
+    public static IReadOnlyList<BenchmarkScenario> CreateCandidates(WeightingOverrides overrides)
+    {
+        return CreateCandidatesCore(overrides);
+    }
+
     public static IReadOnlyList<BenchmarkScenario> CreateCandidates()
+    {
+        return CreateCandidatesCore(WeightingOverrides.Empty);
+    }
+
+    private static IReadOnlyList<BenchmarkScenario> CreateCandidatesCore(WeightingOverrides overrides)
     {
         List<BenchmarkScenario> scenarios = [];
 
@@ -39,6 +54,7 @@ public static class BenchmarkProfileFactory
             algorithmWeight: 0.15,
             emitterWeight: 1.50,
             expectedCostFactor: 0.25,
+            overrides: overrides,
             requiredBaselineRange: ValueRangeKind.Small));
 
         scenarios.AddRange(CreateValueRangeVariants(
@@ -57,6 +73,7 @@ public static class BenchmarkProfileFactory
             algorithmWeight: 0.20,
             emitterWeight: 1.20,
             expectedCostFactor: 0.40,
+            overrides: overrides,
             requiredBaselineRange: ValueRangeKind.Small));
 
         scenarios.AddRange(CreateValueRangeVariants(
@@ -75,6 +92,7 @@ public static class BenchmarkProfileFactory
             algorithmWeight: 0.30,
             emitterWeight: 1.30,
             expectedCostFactor: 0.50,
+            overrides: overrides,
             requiredBaselineRange: ValueRangeKind.Small));
 
         scenarios.AddRange(CreateValueRangeVariants(
@@ -93,6 +111,7 @@ public static class BenchmarkProfileFactory
             algorithmWeight: 1.25,
             emitterWeight: 1.20,
             expectedCostFactor: 0.70,
+            overrides: overrides,
             requiredBaselineRange: ValueRangeKind.Small));
 
         scenarios.AddRange(CreateValueRangeVariants(
@@ -110,7 +129,8 @@ public static class BenchmarkProfileFactory
             ParameterTierKind.Middle,
             algorithmWeight: 0.95,
             emitterWeight: 1.30,
-            expectedCostFactor: 1.10));
+            expectedCostFactor: 1.10,
+            overrides: overrides));
 
         scenarios.AddRange(CreateValueRangeVariants(
             "multiply-byteswap-base32-40",
@@ -127,7 +147,8 @@ public static class BenchmarkProfileFactory
             ParameterTierKind.Middle,
             algorithmWeight: 0.85,
             emitterWeight: 0.80,
-            expectedCostFactor: 1.00));
+            expectedCostFactor: 1.00,
+            overrides: overrides));
 
         scenarios.AddRange(CreateValueRangeVariants(
             "nibbleswap-hex32",
@@ -144,7 +165,8 @@ public static class BenchmarkProfileFactory
             ParameterTierKind.Middle,
             algorithmWeight: 0.70,
             emitterWeight: 1.20,
-            expectedCostFactor: 1.20));
+            expectedCostFactor: 1.20,
+            overrides: overrides));
 
         scenarios.AddRange(CreateValueRangeVariants(
             "chunkperm-base32-40",
@@ -164,7 +186,8 @@ public static class BenchmarkProfileFactory
             ParameterTierKind.Explicit,
             algorithmWeight: 1.30,
             emitterWeight: 0.80,
-            expectedCostFactor: 1.50));
+            expectedCostFactor: 1.50,
+            overrides: overrides));
 
         scenarios.AddRange(CreateValueRangeVariants(
             "feistel-base64-48",
@@ -185,6 +208,7 @@ public static class BenchmarkProfileFactory
             algorithmWeight: 1.10,
             emitterWeight: 1.30,
             expectedCostFactor: 3.00,
+            overrides: overrides,
             requiredBaselineRange: ValueRangeKind.Small));
 
         return scenarios;
@@ -201,6 +225,15 @@ public static class BenchmarkProfileFactory
         };
     }
 
+    public static BenchmarkSelectionOptions ApplySelectionOverrides(BenchmarkSelectionOptions options, WeightingOverrides overrides)
+    {
+        return new BenchmarkSelectionOptions(
+            overrides.Profile ?? options.WeightingProfile,
+            overrides.ScenarioBudget ?? options.ScenarioBudget,
+            overrides.SamplingSeed ?? options.SamplingSeed,
+            overrides.IncludeRequiredBaselines ?? options.IncludeRequiredBaselines);
+    }
+
     private static IReadOnlyList<BenchmarkScenario> CreateValueRangeVariants(
         string scenarioIdStem,
         string nameStem,
@@ -209,13 +242,14 @@ public static class BenchmarkProfileFactory
         double algorithmWeight,
         double emitterWeight,
         double expectedCostFactor,
+        WeightingOverrides overrides,
         ValueRangeKind? requiredBaselineRange = null)
     {
         return
         [
-            CreateScenarioVariant(scenarioIdStem, nameStem, parameters, parameterTier, ValueRangeKind.Tiny, algorithmWeight, emitterWeight, expectedCostFactor, requiredBaselineRange == ValueRangeKind.Tiny),
-            CreateScenarioVariant(scenarioIdStem, nameStem, parameters, parameterTier, ValueRangeKind.Small, algorithmWeight, emitterWeight, expectedCostFactor, requiredBaselineRange == ValueRangeKind.Small),
-            CreateScenarioVariant(scenarioIdStem, nameStem, parameters, parameterTier, ValueRangeKind.Large, algorithmWeight, emitterWeight, expectedCostFactor, requiredBaselineRange == ValueRangeKind.Large)
+            CreateScenarioVariant(scenarioIdStem, nameStem, parameters, parameterTier, ValueRangeKind.Tiny, algorithmWeight, emitterWeight, expectedCostFactor, overrides, requiredBaselineRange == ValueRangeKind.Tiny),
+            CreateScenarioVariant(scenarioIdStem, nameStem, parameters, parameterTier, ValueRangeKind.Small, algorithmWeight, emitterWeight, expectedCostFactor, overrides, requiredBaselineRange == ValueRangeKind.Small),
+            CreateScenarioVariant(scenarioIdStem, nameStem, parameters, parameterTier, ValueRangeKind.Large, algorithmWeight, emitterWeight, expectedCostFactor, overrides, requiredBaselineRange == ValueRangeKind.Large)
         ];
     }
 
@@ -228,6 +262,7 @@ public static class BenchmarkProfileFactory
         double algorithmWeight,
         double emitterWeight,
         double expectedCostFactor,
+        WeightingOverrides overrides,
         bool isRequiredBaseline)
     {
         IReadOnlyList<ulong> values = GetValues(valueRangeKind);
@@ -238,9 +273,10 @@ public static class BenchmarkProfileFactory
             $"{scenarioIdStem}:{suffix}",
             $"{nameStem}-{suffix}",
             parameters with { Name = $"{parameters.Name}-{suffix}" },
+            parameterTier,
             valueRangeKind,
             values,
-            weights);
+            ApplyWeightOverrides(parameters, weights, overrides));
     }
 
     private static ScenarioWeights CreateWeights(
@@ -271,6 +307,49 @@ public static class BenchmarkProfileFactory
             expectedCostFactor,
             selectionWeight,
             isRequiredBaseline);
+    }
+
+    private static ScenarioWeights ApplyWeightOverrides(
+        CodecParameters parameters,
+        ScenarioWeights weights,
+        WeightingOverrides overrides)
+    {
+        double algorithmWeight = weights.AlgorithmWeight;
+        double expectedCostFactor = weights.ExpectedCostFactor;
+
+        if (overrides.MixerOverrides.TryGetValue(parameters.Mixer.Kind.ToString(), out WeightOverrideValues? mixerOverride))
+        {
+            algorithmWeight = mixerOverride.AlgorithmWeight ?? algorithmWeight;
+            expectedCostFactor = mixerOverride.ExpectedCostFactor ?? expectedCostFactor;
+        }
+
+        if (overrides.PermutationOverrides.TryGetValue(parameters.Permutation.Kind.ToString(), out WeightOverrideValues? permutationOverride))
+        {
+            algorithmWeight = permutationOverride.AlgorithmWeight ?? algorithmWeight;
+            expectedCostFactor = permutationOverride.ExpectedCostFactor ?? expectedCostFactor;
+        }
+
+        double emitterWeight = weights.EmitterWeight;
+        if (overrides.EmitterOverrides.TryGetValue(parameters.Emitter.Kind.ToString(), out WeightOverrideValues? emitterOverride))
+        {
+            emitterWeight = emitterOverride.AlgorithmWeight ?? emitterWeight;
+            expectedCostFactor = emitterOverride.ExpectedCostFactor ?? expectedCostFactor;
+        }
+
+        double selectionWeight = algorithmWeight
+            * weights.ParameterTierWeight
+            * weights.ValueRangeWeight
+            * emitterWeight
+            * weights.CustomMutationWeight
+            / expectedCostFactor;
+
+        return weights with
+        {
+            AlgorithmWeight = algorithmWeight,
+            EmitterWeight = emitterWeight,
+            ExpectedCostFactor = expectedCostFactor,
+            SelectionWeight = selectionWeight
+        };
     }
 
     public static IReadOnlyList<ulong> GetValues(ValueRangeKind kind)

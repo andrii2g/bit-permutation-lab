@@ -177,6 +177,12 @@ Config-driven benchmark runs may include custom mutation plugin loading through 
 
 Most of the `PLAN.md` feature surface is implemented, including advanced direct CLI scenario flags, custom mutation plugin loading, config-driven benchmarks, quick-mode reports, and BenchmarkDotNet mode.
 
+Detailed reference notes live in:
+- [docs/FORMULA.md](docs\FORMULA.md)
+- [docs/PARAMETERS.md](docs\PARAMETERS.md)
+- [docs/BENCHMARKING.md](docs\BENCHMARKING.md)
+- [docs/REPORT_FORMAT.md](docs\REPORT_FORMAT.md)
+
 The current weighting implementation covers:
 - required baselines
 - deterministic scenario selection by seed
