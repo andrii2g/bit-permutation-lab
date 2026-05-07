@@ -183,7 +183,54 @@ public sealed class SimplifiedCliTests
 
         Assert.Equal(0, exitCode);
         Assert.Contains("Profile: Quick", stdout.ToString());
-        Assert.Contains("Scenario | Range | Weight | Baseline | Value | Output", stdout.ToString());
+        Assert.Contains("Raw Performance", stdout.ToString());
+        Assert.Contains("Weighting Metadata", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Benchmark_CanWriteWeightedOnlyReport()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "benchmark",
+            "--profile", "quick",
+            "--iterations", "5",
+            "--report-weighted", "true",
+            "--report-unweighted", "false"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Weighting Metadata", stdout.ToString());
+        Assert.DoesNotContain("Raw Performance", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Benchmark_AcceptsWeightingOptions()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "benchmark",
+            "--profile", "default",
+            "--weighting-profile", "exploratory",
+            "--scenario-budget", "4",
+            "--sampling-seed", "77",
+            "--include-required-baselines", "false",
+            "--iterations", "5"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("WeightingProfile: Exploratory", stdout.ToString());
+        Assert.Contains("ScenarioBudget: 4", stdout.ToString());
+        Assert.Contains("SamplingSeed: 77", stdout.ToString());
+        Assert.Contains("IncludeRequiredBaselines: False", stdout.ToString());
         Assert.Equal(string.Empty, stderr.ToString());
     }
 }

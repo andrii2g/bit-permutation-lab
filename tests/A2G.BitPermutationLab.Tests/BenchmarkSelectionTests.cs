@@ -43,4 +43,16 @@ public sealed class BenchmarkSelectionTests
 
         Assert.Equal(candidates.Count, selected.Count);
     }
+
+    [Fact]
+    public void WeightingProfile_ChangesSelectedScenarioSet()
+    {
+        BenchmarkSelectionOptions speedFirst = new(WeightingProfileKind.SpeedFirst, 6, 1234);
+        BenchmarkSelectionOptions exploratory = new(WeightingProfileKind.Exploratory, 6, 1234);
+
+        string[] speedIds = BenchmarkProfileFactory.Create(speedFirst).Select(static scenario => scenario.ScenarioId).ToArray();
+        string[] exploratoryIds = BenchmarkProfileFactory.Create(exploratory).Select(static scenario => scenario.ScenarioId).ToArray();
+
+        Assert.NotEqual(speedIds, exploratoryIds);
+    }
 }

@@ -1,3 +1,5 @@
+using A2G.BitPermutationLab.Core;
+
 namespace A2G.BitPermutationLab.Benchmarking;
 
 public sealed record BenchmarkResultRow(
