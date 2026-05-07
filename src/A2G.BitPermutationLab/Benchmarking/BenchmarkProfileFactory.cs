@@ -273,7 +273,7 @@ public static class BenchmarkProfileFactory
             isRequiredBaseline);
     }
 
-    private static IReadOnlyList<ulong> GetValues(ValueRangeKind kind)
+    public static IReadOnlyList<ulong> GetValues(ValueRangeKind kind)
     {
         return kind switch
         {

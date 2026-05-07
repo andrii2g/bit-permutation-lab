@@ -4,6 +4,7 @@ namespace A2G.BitPermutationLab.Benchmarking;
 
 public sealed record BenchmarkResultRow(
     string Profile,
+    string Mode,
     string ScenarioId,
     string ScenarioName,
     ValueRangeKind ValueRangeKind,
@@ -21,5 +22,8 @@ public sealed record BenchmarkResultRow(
     double EncodeNanoseconds,
     double DecodeNanoseconds,
     double RoundTripNanoseconds,
+    double EncodeOperationsPerSecond,
+    double DecodeOperationsPerSecond,
+    long AllocatedBytes,
     bool RoundTripValid,
     string SampleOutput);
