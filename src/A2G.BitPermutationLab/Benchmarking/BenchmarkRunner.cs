@@ -7,25 +7,38 @@ public static class BenchmarkRunner
 {
     public static IReadOnlyList<BenchmarkResultRow> Run(BenchmarkProfileKind profileKind, int iterations)
     {
+        return Run(BenchmarkExecutionOptions.CreateDefault(profileKind, iterations));
+    }
+
+    public static IReadOnlyList<BenchmarkResultRow> Run(BenchmarkExecutionOptions options)
+    {
         CodecPipeline pipeline = new();
         List<BenchmarkResultRow> rows = [];
 
-        foreach (BenchmarkScenario scenario in BenchmarkProfileFactory.Create(profileKind))
+        foreach (BenchmarkScenario scenario in BenchmarkProfileFactory.Create(options.Selection))
         {
             foreach (ulong value in scenario.Values)
             {
                 CodecResult encoded = pipeline.Encode(value, scenario.Parameters);
                 DecodeResult decoded = DecodeWithEncodedResult(pipeline, encoded, scenario.Parameters);
 
-                double encodeNs = Measure(iterations, () => pipeline.Encode(value, scenario.Parameters));
-                double decodeNs = Measure(iterations, () => DecodeWithEncodedResult(pipeline, encoded, scenario.Parameters));
+                double encodeNs = Measure(options.Iterations, () => pipeline.Encode(value, scenario.Parameters));
+                double decodeNs = Measure(options.Iterations, () => DecodeWithEncodedResult(pipeline, encoded, scenario.Parameters));
 
                 rows.Add(new BenchmarkResultRow(
+                    options.ProfileLabel,
                     scenario.ScenarioId,
                     scenario.Name,
                     scenario.ValueRangeKind,
                     scenario.Weights.SelectionWeight,
+                    scenario.Weights.ExpectedCostFactor,
                     scenario.Weights.IsRequiredBaseline,
+                    scenario.Parameters.BitLength,
+                    scenario.Parameters.Mixer.Kind,
+                    scenario.Parameters.Permutation.Kind,
+                    scenario.Parameters.Chunking.ChunkSize,
+                    scenario.Parameters.Emitter.EmitterKind,
+                    scenario.Parameters.Emitter.OutputKind,
                     value,
                     encoded.OutputLength,
                     encodeNs,
