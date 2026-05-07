@@ -183,7 +183,7 @@ public sealed class SimplifiedCliTests
 
         Assert.Equal(0, exitCode);
         Assert.Contains("Profile: Quick", stdout.ToString());
-        Assert.Contains("Scenario | Value | Output", stdout.ToString());
+        Assert.Contains("Scenario | Range | Weight | Baseline | Value | Output", stdout.ToString());
         Assert.Equal(string.Empty, stderr.ToString());
     }
 }
