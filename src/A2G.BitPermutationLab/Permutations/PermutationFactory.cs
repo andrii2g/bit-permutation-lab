@@ -13,6 +13,9 @@ public static class PermutationFactory
             PermutationKind.Rotate => new RotatePermutation(),
             PermutationKind.ByteSwap => new ByteSwapPermutation(),
             PermutationKind.BitReverse => new BitReversePermutation(),
+            PermutationKind.NibbleSwap => new NibbleSwapPermutation(),
+            PermutationKind.ChunkPermutation => new ChunkPermutation(),
+            PermutationKind.Feistel => new FeistelPermutation(),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported permutation kind in this iteration.")
         };
     }
