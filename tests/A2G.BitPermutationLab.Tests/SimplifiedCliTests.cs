@@ -233,4 +233,70 @@ public sealed class SimplifiedCliTests
         Assert.Contains("IncludeRequiredBaselines: False", stdout.ToString());
         Assert.Equal(string.Empty, stderr.ToString());
     }
+
+    [Fact]
+    public void Benchmark_Config_WritesMarkdownAndCsvReports()
+    {
+        string tempDirectory = Path.Combine(Path.GetTempPath(), "bit-permutation-lab-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        string configPath = Path.Combine(tempDirectory, "benchmark.json");
+        string markdownPath = Path.Combine(tempDirectory, "report.md");
+        string csvPath = Path.Combine(tempDirectory, "report.csv");
+
+        try
+        {
+            File.WriteAllText(configPath,
+                """
+                {
+                  "scenarios": [
+                    {
+                      "name": "xor-rotate-hex32",
+                      "values": [1, 2, 1000],
+                      "parameters": {
+                        "name": "xor-rotate-hex32",
+                        "numberKind": "UInt32",
+                        "bitLength": 32,
+                        "saltSeed": 42,
+                        "binary": { "kind": "FixedUnsigned", "bitOrder": "MsbFirst", "byteOrder": "BigEndian" },
+                        "mixer": { "kind": "Xor", "maskDerivation": "SplitMix64" },
+                        "permutation": { "kind": "Rotate", "rotateBy": 11 },
+                        "chunking": { "kind": "Fixed", "chunkSize": 4, "chunkReadOrder": "MsbFirst" },
+                        "emitter": { "kind": "Hex16", "alphabetKind": "Hex16", "outputKind": "String", "byteArrayTextFormat": "Hex" }
+                      }
+                    }
+                  ],
+                  "benchmark": {
+                    "mode": "Quick",
+                    "iterations": 5,
+                    "validate": true
+                  }
+                }
+                """);
+
+            var stdout = new StringWriter(new StringBuilder());
+            var stderr = new StringWriter(new StringBuilder());
+
+            int exitCode = CliApplication.Run(
+            [
+                "benchmark",
+                "--config", configPath,
+                "--output", markdownPath,
+                "--csv", csvPath
+            ], stdout, stderr);
+
+            Assert.Equal(0, exitCode);
+            Assert.True(File.Exists(markdownPath));
+            Assert.True(File.Exists(csvPath));
+            Assert.Contains("MarkdownReport:", stdout.ToString());
+            Assert.Contains("CsvReport:", stdout.ToString());
+            Assert.Equal(string.Empty, stderr.ToString());
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, true);
+            }
+        }
+    }
 }

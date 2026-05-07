@@ -106,9 +106,32 @@ public static class CliApplication
 
     private static int RunBenchmark(CliArguments arguments, TextWriter stdout, TextWriter stderr)
     {
-        if (arguments.Contains("config") || arguments.Contains("output") || arguments.Contains("csv") || arguments.Contains("validate") || arguments.Contains("weights-config"))
+        if (arguments.Contains("weights-config"))
         {
-            throw new CliUsageException("The simplified benchmark command is code-driven only in this iteration. Config and report-file flags are not implemented.");
+            throw new CliUsageException("External weights config files are not implemented in this iteration.");
+        }
+
+        BenchmarkReportOptions report = CreateReportOptions(arguments);
+        bool includeInvalid = arguments.GetOptionalBool("include-invalid") ?? true;
+        int top = arguments.GetOptionalInt("top") ?? 5;
+
+        BenchmarkRunResult result;
+
+        if (arguments.Contains("config"))
+        {
+            LoadedBenchmarkConfig loaded = BenchmarkConfigLoader.Load(arguments.GetRequiredString("config"));
+            BenchmarkExecutionOptions execution = loaded.Options with
+            {
+                Iterations = arguments.GetOptionalInt("iterations") ?? loaded.Options.Iterations,
+                Report = report,
+                ValidateScenarios = arguments.GetOptionalBool("validate") ?? loaded.Options.ValidateScenarios
+            };
+
+            IReadOnlyList<BenchmarkScenario> scenarios = ApplyValueSet(loaded.Scenarios, arguments.GetOptionalString("value-set"), loaded.ValueSet);
+            result = BenchmarkRunner.RunDetailed(scenarios, execution);
+            WriteBenchmarkHeader(stdout, execution.ProfileLabel, execution.ModeLabel, execution.Iterations, execution.Selection, top);
+            WriteBenchmarkOutputs(result, stdout, arguments.GetOptionalString("output") ?? loaded.OutputMarkdown, arguments.GetOptionalString("csv") ?? loaded.OutputCsv, includeInvalid, top);
+            return 0;
         }
 
         BenchmarkProfileKind profileKind = arguments.GetEnum("profile", BenchmarkProfileKind.Quick, ParseBenchmarkProfileKind);
@@ -119,10 +142,33 @@ public static class CliApplication
             throw new CliUsageException("--iterations must be greater than zero.");
         }
 
+        BenchmarkModeKind modeKind = arguments.GetEnum("mode", BenchmarkModeKind.Quick, ParseBenchmarkModeKind);
         WeightingProfileKind weightingProfile = arguments.GetEnum("weighting-profile", DefaultWeightingProfile(profileKind), ParseWeightingProfileKind);
         int? scenarioBudget = arguments.GetOptionalInt("scenario-budget") ?? profileDefaults.ScenarioBudget;
         ulong samplingSeed = arguments.GetOptionalULong("sampling-seed") ?? profileDefaults.SamplingSeed;
         bool includeRequiredBaselines = arguments.GetOptionalBool("include-required-baselines") ?? true;
+
+        BenchmarkExecutionOptions directExecution = new(
+            profileKind.ToString(),
+            modeKind.ToString(),
+            iterations,
+            new BenchmarkSelectionOptions(weightingProfile, scenarioBudget, samplingSeed, includeRequiredBaselines),
+            report,
+            arguments.GetOptionalBool("validate") ?? true);
+
+        IReadOnlyList<BenchmarkScenario> directScenarios = ApplyValueSet(
+            BenchmarkProfileFactory.Create(directExecution.Selection),
+            arguments.GetOptionalString("value-set"),
+            BenchmarkValueSetKind.Default);
+
+        result = BenchmarkRunner.RunDetailed(directScenarios, directExecution);
+        WriteBenchmarkHeader(stdout, profileKind.ToString(), modeKind.ToString(), iterations, directExecution.Selection, top);
+        WriteBenchmarkOutputs(result, stdout, arguments.GetOptionalString("output"), arguments.GetOptionalString("csv"), includeInvalid, top);
+        return 0;
+    }
+
+    private static BenchmarkReportOptions CreateReportOptions(CliArguments arguments)
+    {
         bool includeWeightedReport = arguments.GetOptionalBool("report-weighted") ?? true;
         bool includeUnweightedReport = arguments.GetOptionalBool("report-unweighted") ?? true;
         if (!includeWeightedReport && !includeUnweightedReport)
@@ -130,25 +176,100 @@ public static class CliApplication
             throw new CliUsageException("At least one of --report-weighted or --report-unweighted must be true.");
         }
 
-        BenchmarkExecutionOptions execution = new(
-            profileKind.ToString(),
-            iterations,
-            new BenchmarkSelectionOptions(weightingProfile, scenarioBudget, samplingSeed, includeRequiredBaselines),
-            new BenchmarkReportOptions(includeWeightedReport, includeUnweightedReport));
+        return new BenchmarkReportOptions(includeWeightedReport, includeUnweightedReport);
+    }
 
-        IReadOnlyList<BenchmarkResultRow> rows = BenchmarkRunner.Run(execution);
-        stdout.WriteLine($"Profile: {profileKind}");
-        stdout.WriteLine($"WeightingProfile: {weightingProfile}");
-        stdout.WriteLine($"Iterations: {iterations}");
-        if (scenarioBudget is not null)
+    private static IReadOnlyList<BenchmarkScenario> ApplyValueSet(
+        IReadOnlyList<BenchmarkScenario> scenarios,
+        string? explicitValueSet,
+        BenchmarkValueSetKind defaultValueSet)
+    {
+        BenchmarkValueSetKind valueSet = explicitValueSet is null
+            ? defaultValueSet
+            : ParseBenchmarkValueSetKind(explicitValueSet);
+
+        IReadOnlyList<ulong>? values = valueSet switch
         {
-            stdout.WriteLine($"ScenarioBudget: {scenarioBudget}");
+            BenchmarkValueSetKind.Default => null,
+            BenchmarkValueSetKind.Small => [1UL, 2UL],
+            BenchmarkValueSetKind.Middle => [1_000UL, 10_000UL],
+            BenchmarkValueSetKind.Large => [1_000_000UL, 1_000_000_000UL],
+            BenchmarkValueSetKind.Max => [ulong.MaxValue, ulong.MaxValue - 1UL, uint.MaxValue],
+            _ => null
+        };
+
+        if (values is null)
+        {
+            return scenarios;
         }
 
-        stdout.WriteLine($"SamplingSeed: {samplingSeed}");
-        stdout.WriteLine($"IncludeRequiredBaselines: {includeRequiredBaselines}");
-        BenchmarkConsoleFormatter.Write(rows, stdout, execution.Report);
-        return 0;
+        return [.. scenarios.Select(scenario =>
+            scenario with
+            {
+                Values = [.. values.Where(value => (value & ~BitMask.ForBitLength(scenario.Parameters.BitLength)) == 0)]
+            })];
+    }
+
+    private static void WriteBenchmarkHeader(
+        TextWriter stdout,
+        string profile,
+        string mode,
+        int iterations,
+        BenchmarkSelectionOptions selection,
+        int top)
+    {
+        stdout.WriteLine($"Profile: {profile}");
+        stdout.WriteLine($"Mode: {mode}");
+        stdout.WriteLine($"WeightingProfile: {selection.WeightingProfile}");
+        stdout.WriteLine($"Iterations: {iterations}");
+        if (selection.ScenarioBudget is not null)
+        {
+            stdout.WriteLine($"ScenarioBudget: {selection.ScenarioBudget}");
+        }
+
+        stdout.WriteLine($"SamplingSeed: {selection.SamplingSeed}");
+        stdout.WriteLine($"IncludeRequiredBaselines: {selection.IncludeRequiredBaselines}");
+        stdout.WriteLine($"Top: {top}");
+    }
+
+    private static void WriteBenchmarkOutputs(
+        BenchmarkRunResult result,
+        TextWriter stdout,
+        string? markdownPath,
+        string? csvPath,
+        bool includeInvalid,
+        int top)
+    {
+        BenchmarkRunResult effectiveResult = includeInvalid
+            ? result
+            : result with { SkippedRows = [] };
+
+        BenchmarkConsoleFormatter.Write(effectiveResult.Rows, stdout, effectiveResult.Options.Report);
+
+        if (!string.IsNullOrWhiteSpace(markdownPath))
+        {
+            EnsureParentDirectory(markdownPath);
+            using StreamWriter writer = File.CreateText(markdownPath);
+            MarkdownBenchmarkReportWriter.Write(effectiveResult, writer, top);
+            stdout.WriteLine($"MarkdownReport: {markdownPath}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(csvPath))
+        {
+            EnsureParentDirectory(csvPath);
+            using StreamWriter writer = File.CreateText(csvPath);
+            CsvBenchmarkReportWriter.Write(effectiveResult, writer);
+            stdout.WriteLine($"CsvReport: {csvPath}");
+        }
+    }
+
+    private static void EnsureParentDirectory(string path)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
     }
 
     private static CodecParameters CreateParameters(CliArguments arguments)
@@ -399,6 +520,23 @@ public static class CliApplication
         _ => throw new CliUsageException($"Unsupported weighting profile '{value}'.")
     };
 
+    private static BenchmarkModeKind ParseBenchmarkModeKind(string value) => value.ToLowerInvariant() switch
+    {
+        "quick" => BenchmarkModeKind.Quick,
+        "benchmarkdotnet" => BenchmarkModeKind.BenchmarkDotNet,
+        _ => throw new CliUsageException($"Unsupported benchmark mode '{value}'.")
+    };
+
+    private static BenchmarkValueSetKind ParseBenchmarkValueSetKind(string value) => value.ToLowerInvariant() switch
+    {
+        "default" => BenchmarkValueSetKind.Default,
+        "small" => BenchmarkValueSetKind.Small,
+        "middle" => BenchmarkValueSetKind.Middle,
+        "large" => BenchmarkValueSetKind.Large,
+        "max" => BenchmarkValueSetKind.Max,
+        _ => throw new CliUsageException($"Unsupported benchmark value set '{value}'.")
+    };
+
     private static AlphabetKind DefaultAlphabetKind(EmitterKind kind) => kind switch
     {
         EmitterKind.Hex16 => AlphabetKind.Hex16,
@@ -452,6 +590,7 @@ public static class CliApplication
         stderr.WriteLine("  bpl decode --value <text-or-byte-array> --bits <n> --chunk-size <n> --mix <kind> --permute <kind> --emitter <kind> [common flags]");
         stderr.WriteLine("  bpl list");
         stderr.WriteLine("  bpl benchmark --profile quick|default|full [--iterations <n>] [--weighting-profile <kind>] [--scenario-budget <n>] [--sampling-seed <ulong>]");
+        stderr.WriteLine("  bpl benchmark --config <benchmark.json> [--output <report.md>] [--csv <report.csv>]");
         stderr.WriteLine("Common flags:");
         stderr.WriteLine("  --number-kind uint32|uint64");
         stderr.WriteLine("  --salt <ulong> | --salt-text <text>");
@@ -460,6 +599,7 @@ public static class CliApplication
         stderr.WriteLine("  --byte-array-format hex|base64|csv-decimal");
         stderr.WriteLine("Notes:");
         stderr.WriteLine("  Benchmark weighting profiles: smoke, speed-first, balanced, exploratory, exhaustive.");
+        stderr.WriteLine("  Benchmark value sets: default, small, middle, large, max.");
         stderr.WriteLine("  Advanced permutation/mutation/scenario shaping flags are intentionally not exposed by the simplified CLI.");
         stderr.WriteLine("  Use the library/code path for benchmarks and advanced scenarios.");
     }
