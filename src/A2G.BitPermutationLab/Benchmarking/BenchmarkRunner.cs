@@ -21,7 +21,11 @@ public static class BenchmarkRunner
                 double decodeNs = Measure(iterations, () => DecodeWithEncodedResult(pipeline, encoded, scenario.Parameters));
 
                 rows.Add(new BenchmarkResultRow(
+                    scenario.ScenarioId,
                     scenario.Name,
+                    scenario.ValueRangeKind,
+                    scenario.Weights.SelectionWeight,
+                    scenario.Weights.IsRequiredBaseline,
                     value,
                     encoded.OutputLength,
                     encodeNs,
