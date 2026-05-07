@@ -106,22 +106,48 @@ public static class CliApplication
 
     private static int RunBenchmark(CliArguments arguments, TextWriter stdout, TextWriter stderr)
     {
-        if (arguments.Contains("config") || arguments.Contains("output") || arguments.Contains("csv") || arguments.Contains("validate"))
+        if (arguments.Contains("config") || arguments.Contains("output") || arguments.Contains("csv") || arguments.Contains("validate") || arguments.Contains("weights-config"))
         {
             throw new CliUsageException("The simplified benchmark command is code-driven only in this iteration. Config and report-file flags are not implemented.");
         }
 
         BenchmarkProfileKind profileKind = arguments.GetEnum("profile", BenchmarkProfileKind.Quick, ParseBenchmarkProfileKind);
+        BenchmarkSelectionOptions profileDefaults = BenchmarkProfileFactory.CreateSelectionOptions(profileKind);
         int iterations = arguments.GetOptionalInt("iterations") ?? 1000;
         if (iterations <= 0)
         {
             throw new CliUsageException("--iterations must be greater than zero.");
         }
 
-        IReadOnlyList<BenchmarkResultRow> rows = BenchmarkRunner.Run(profileKind, iterations);
+        WeightingProfileKind weightingProfile = arguments.GetEnum("weighting-profile", DefaultWeightingProfile(profileKind), ParseWeightingProfileKind);
+        int? scenarioBudget = arguments.GetOptionalInt("scenario-budget") ?? profileDefaults.ScenarioBudget;
+        ulong samplingSeed = arguments.GetOptionalULong("sampling-seed") ?? profileDefaults.SamplingSeed;
+        bool includeRequiredBaselines = arguments.GetOptionalBool("include-required-baselines") ?? true;
+        bool includeWeightedReport = arguments.GetOptionalBool("report-weighted") ?? true;
+        bool includeUnweightedReport = arguments.GetOptionalBool("report-unweighted") ?? true;
+        if (!includeWeightedReport && !includeUnweightedReport)
+        {
+            throw new CliUsageException("At least one of --report-weighted or --report-unweighted must be true.");
+        }
+
+        BenchmarkExecutionOptions execution = new(
+            profileKind.ToString(),
+            iterations,
+            new BenchmarkSelectionOptions(weightingProfile, scenarioBudget, samplingSeed, includeRequiredBaselines),
+            new BenchmarkReportOptions(includeWeightedReport, includeUnweightedReport));
+
+        IReadOnlyList<BenchmarkResultRow> rows = BenchmarkRunner.Run(execution);
         stdout.WriteLine($"Profile: {profileKind}");
+        stdout.WriteLine($"WeightingProfile: {weightingProfile}");
         stdout.WriteLine($"Iterations: {iterations}");
-        BenchmarkConsoleFormatter.Write(rows, stdout);
+        if (scenarioBudget is not null)
+        {
+            stdout.WriteLine($"ScenarioBudget: {scenarioBudget}");
+        }
+
+        stdout.WriteLine($"SamplingSeed: {samplingSeed}");
+        stdout.WriteLine($"IncludeRequiredBaselines: {includeRequiredBaselines}");
+        BenchmarkConsoleFormatter.Write(rows, stdout, execution.Report);
         return 0;
     }
 
@@ -363,6 +389,16 @@ public static class CliApplication
         _ => throw new CliUsageException($"Unsupported benchmark profile '{value}'.")
     };
 
+    private static WeightingProfileKind ParseWeightingProfileKind(string value) => value.ToLowerInvariant() switch
+    {
+        "smoke" => WeightingProfileKind.Smoke,
+        "speed-first" => WeightingProfileKind.SpeedFirst,
+        "balanced" => WeightingProfileKind.Balanced,
+        "exploratory" => WeightingProfileKind.Exploratory,
+        "exhaustive" => WeightingProfileKind.Exhaustive,
+        _ => throw new CliUsageException($"Unsupported weighting profile '{value}'.")
+    };
+
     private static AlphabetKind DefaultAlphabetKind(EmitterKind kind) => kind switch
     {
         EmitterKind.Hex16 => AlphabetKind.Hex16,
@@ -377,6 +413,14 @@ public static class CliApplication
     {
         EmitterKind.ByteArray => OutputKind.ByteArray,
         _ => OutputKind.String
+    };
+
+    private static WeightingProfileKind DefaultWeightingProfile(BenchmarkProfileKind kind) => kind switch
+    {
+        BenchmarkProfileKind.Quick => WeightingProfileKind.SpeedFirst,
+        BenchmarkProfileKind.Default => WeightingProfileKind.Balanced,
+        BenchmarkProfileKind.Full => WeightingProfileKind.Exhaustive,
+        _ => throw new CliUsageException($"No default weighting profile for benchmark profile '{kind}'.")
     };
 
     private static ulong ParseULongInvariant(string value, string flagName)
@@ -407,7 +451,7 @@ public static class CliApplication
         stderr.WriteLine("  bpl encode --value <number> --bits <n> --chunk-size <n> --mix <kind> --permute <kind> --emitter <kind> [common flags]");
         stderr.WriteLine("  bpl decode --value <text-or-byte-array> --bits <n> --chunk-size <n> --mix <kind> --permute <kind> --emitter <kind> [common flags]");
         stderr.WriteLine("  bpl list");
-        stderr.WriteLine("  bpl benchmark --profile quick|default|full [--iterations <n>]");
+        stderr.WriteLine("  bpl benchmark --profile quick|default|full [--iterations <n>] [--weighting-profile <kind>] [--scenario-budget <n>] [--sampling-seed <ulong>]");
         stderr.WriteLine("Common flags:");
         stderr.WriteLine("  --number-kind uint32|uint64");
         stderr.WriteLine("  --salt <ulong> | --salt-text <text>");
@@ -415,6 +459,7 @@ public static class CliApplication
         stderr.WriteLine("  --output-kind string|byte-array");
         stderr.WriteLine("  --byte-array-format hex|base64|csv-decimal");
         stderr.WriteLine("Notes:");
+        stderr.WriteLine("  Benchmark weighting profiles: smoke, speed-first, balanced, exploratory, exhaustive.");
         stderr.WriteLine("  Advanced permutation/mutation/scenario shaping flags are intentionally not exposed by the simplified CLI.");
         stderr.WriteLine("  Use the library/code path for benchmarks and advanced scenarios.");
     }
@@ -512,6 +557,36 @@ internal sealed class CliArguments
         }
 
         throw new CliUsageException($"Flag '--{key}' requires an integer value.");
+    }
+
+    public ulong? GetOptionalULong(string key)
+    {
+        if (!_values.TryGetValue(key, out string? value))
+        {
+            return null;
+        }
+
+        if (ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong parsed))
+        {
+            return parsed;
+        }
+
+        throw new CliUsageException($"Flag '--{key}' requires an unsigned integer value.");
+    }
+
+    public bool? GetOptionalBool(string key)
+    {
+        if (!_values.TryGetValue(key, out string? value))
+        {
+            return null;
+        }
+
+        return value.ToLowerInvariant() switch
+        {
+            "true" => true,
+            "false" => false,
+            _ => throw new CliUsageException($"Flag '--{key}' requires true or false.")
+        };
     }
 
     public TEnum GetEnum<TEnum>(string key, TEnum defaultValue, Func<string, TEnum> parser)

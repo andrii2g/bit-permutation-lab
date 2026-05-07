@@ -25,7 +25,7 @@ public static class BenchmarkScenarioSelector
 
         while (selected.Count < targetCount && remainder.Count > 0)
         {
-            BenchmarkScenario next = TakeWeightedScenario(remainder, random);
+            BenchmarkScenario next = TakeWeightedScenario(remainder, random, options.WeightingProfile);
             selected.Add(next);
         }
 
@@ -52,16 +52,16 @@ public static class BenchmarkScenarioSelector
         return Math.Max(requiredBaselineCount, Math.Min(candidateCount, options.ScenarioBudget.Value));
     }
 
-    private static BenchmarkScenario TakeWeightedScenario(List<BenchmarkScenario> candidates, Random random)
+    private static BenchmarkScenario TakeWeightedScenario(List<BenchmarkScenario> candidates, Random random, WeightingProfileKind weightingProfile)
     {
-        double totalWeight = candidates.Sum(candidate => GetEffectiveSelectionWeight(candidate));
+        double totalWeight = candidates.Sum(candidate => GetEffectiveSelectionWeight(candidate, weightingProfile));
         double threshold = random.NextDouble() * totalWeight;
         double running = 0d;
 
         for (int i = 0; i < candidates.Count; i++)
         {
             BenchmarkScenario candidate = candidates[i];
-            running += GetEffectiveSelectionWeight(candidate);
+            running += GetEffectiveSelectionWeight(candidate, weightingProfile);
             if (threshold <= running || i == candidates.Count - 1)
             {
                 candidates.RemoveAt(i);
@@ -80,11 +80,10 @@ public static class BenchmarkScenarioSelector
             .ThenBy(static scenario => scenario.ScenarioId, StringComparer.Ordinal)];
     }
 
-    private static double GetEffectiveSelectionWeight(BenchmarkScenario scenario)
+    private static double GetEffectiveSelectionWeight(BenchmarkScenario scenario, WeightingProfileKind weightingProfile)
     {
         double effectiveWeight = Math.Max(0.000001d, scenario.Weights.SelectionWeight);
-
-        effectiveWeight *= scenario.Parameters.Emitter.EmitterKind switch
+        double emitterFactor = scenario.Parameters.Emitter.EmitterKind switch
         {
             EmitterKind.ByteArray => 1.25,
             EmitterKind.Base64Url => 1.15,
@@ -92,7 +91,17 @@ public static class BenchmarkScenarioSelector
             EmitterKind.Base32Crockford => 0.90,
             _ => 1.00
         };
+        double profileFactor = weightingProfile switch
+        {
+            WeightingProfileKind.Smoke => scenario.Weights.IsRequiredBaseline ? 3.00 : 0.25,
+            WeightingProfileKind.SpeedFirst => emitterFactor * (1.0 / Math.Max(0.50d, scenario.Weights.ExpectedCostFactor)),
+            WeightingProfileKind.Balanced => 1.00,
+            WeightingProfileKind.Exploratory => 1.00 + Math.Max(0d, scenario.Weights.AlgorithmWeight - 1.00d) + Math.Max(0d, scenario.Weights.ExpectedCostFactor - 1.00d) * 0.15,
+            WeightingProfileKind.Exhaustive => 1.00,
+            _ => 1.00
+        };
 
+        effectiveWeight *= profileFactor;
         effectiveWeight *= scenario.Weights.IsRequiredBaseline ? 1.50 : 1.00;
         return effectiveWeight;
     }
