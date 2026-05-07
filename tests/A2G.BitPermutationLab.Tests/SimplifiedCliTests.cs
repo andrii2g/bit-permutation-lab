@@ -163,8 +163,9 @@ public sealed class SimplifiedCliTests
         int exitCode = CliApplication.Run(["list"], stdout, stderr);
 
         Assert.Equal(0, exitCode);
-        Assert.Contains("Supported simplified CLI values", stdout.ToString());
+        Assert.Contains("Available scenario components", stdout.ToString());
         Assert.Contains("Benchmark profiles", stdout.ToString());
+        Assert.Contains("Registered custom mutations", stdout.ToString());
         Assert.Equal(string.Empty, stderr.ToString());
     }
 

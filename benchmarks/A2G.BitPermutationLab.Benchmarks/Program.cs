@@ -19,6 +19,12 @@ internal static class Program
                 ValidateScenarios = options.Validate ?? loaded.Options.ValidateScenarios
             };
 
+            if (options.Mode == BenchmarkModeKind.BenchmarkDotNet || string.Equals(execution.ModeLabel, BenchmarkModeKind.BenchmarkDotNet.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                BenchmarkDotNetRunner.Run(loaded.Scenarios);
+                return 0;
+            }
+
             result = BenchmarkRunner.RunDetailed(loaded.Scenarios, execution);
             Console.WriteLine($"Benchmark profile: {execution.ProfileLabel}");
             Console.WriteLine($"Benchmark mode: {execution.ModeLabel}");
@@ -45,6 +51,13 @@ internal static class Program
             new BenchmarkSelectionOptions(options.WeightingProfile, options.ScenarioBudget, options.SamplingSeed, options.IncludeRequiredBaselines),
             new BenchmarkReportOptions(options.ReportWeighted, options.ReportUnweighted),
             options.Validate ?? true);
+
+        if (options.Mode == BenchmarkModeKind.BenchmarkDotNet)
+        {
+            IReadOnlyList<BenchmarkScenario> scenarios = BenchmarkProfileFactory.Create(directExecution.Selection);
+            BenchmarkDotNetRunner.Run(scenarios);
+            return 0;
+        }
 
         result = BenchmarkRunner.RunDetailed(directExecution);
         Console.WriteLine($"Benchmark profile: {options.Profile}");

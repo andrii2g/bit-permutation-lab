@@ -3,6 +3,8 @@ using A2G.BitPermutationLab.Benchmarking;
 using A2G.BitPermutationLab.Binary;
 using A2G.BitPermutationLab.Chunking;
 using A2G.BitPermutationLab.Core;
+using A2G.BitPermutationLab.Custom;
+using A2G.BitPermutationLab.Dictionaries;
 using A2G.BitPermutationLab.Emitters;
 using A2G.BitPermutationLab.Mixers;
 using A2G.BitPermutationLab.Permutations;
@@ -91,17 +93,36 @@ public static class CliApplication
 
     private static int RunList(TextWriter stdout)
     {
-        stdout.WriteLine("Supported simplified CLI values");
-        stdout.WriteLine("Number kinds: uint32, uint64");
-        stdout.WriteLine("Mixers: none, xor, add, multiply");
-        stdout.WriteLine("Permutations: identity, not, rotate, byteswap, bitreverse, nibbleswap");
+        stdout.WriteLine("Available scenario components");
+        stdout.WriteLine("Number kinds: UInt32, UInt64");
+        stdout.WriteLine("Bit lengths: 8, 16, 24, 32, 40, 48, 56, 64");
+        stdout.WriteLine("Binary kinds: FixedUnsigned");
+        stdout.WriteLine("Bit orders: MsbFirst, LsbFirst");
+        stdout.WriteLine("Byte orders: BigEndian, LittleEndian");
+        stdout.WriteLine("Mixers: None, Xor, Add, Multiply");
+        stdout.WriteLine("Mixer derivation modes: None, UseSaltSeedDirectly, SplitMix64");
+        stdout.WriteLine("Permutations: Identity, Not, Rotate, ByteSwap, BitReverse, NibbleSwap, ChunkPermutation, Feistel");
+        stdout.WriteLine("Nibble swap variants: ReverseNibbles, SwapAdjacentNibbles");
+        stdout.WriteLine("Chunk permutation variants: ExplicitOrder, ReverseGroups, RotateGroupsLeft, RotateGroupsRight, SwapAdjacentGroups, SaltShuffle");
+        stdout.WriteLine("Feistel round functions: XorShiftAdd, MultiplyXor");
         stdout.WriteLine("Chunk sizes: 4, 5, 6, 8");
-        stdout.WriteLine("Emitters: hex16, base32, base64url, bytes");
-        stdout.WriteLine("Output kinds: string, byte-array");
-        stdout.WriteLine("Byte array formats: hex, base64, csv-decimal");
-        stdout.WriteLine("Benchmark profiles: quick, default, full");
-        stdout.WriteLine("Advanced scenario shaping remains code-first and is intentionally not exposed by the simplified CLI.");
+        stdout.WriteLine("Chunk read orders: MsbFirst, LsbFirst");
+        stdout.WriteLine("Emitters: Hex16, Base32Crockford, Base64Url, ByteArray, CustomAlphabet");
+        stdout.WriteLine("Alphabets: None, Hex16, Base32Crockford, Base64Url, Custom");
+        stdout.WriteLine("Built-in alphabet lengths: Hex16=16, Base32Crockford=32, Base64Url=64");
+        stdout.WriteLine("Output kinds: String, CharArray, ByteArray");
+        stdout.WriteLine("Byte array text formats: Hex, Base64, CommaSeparatedDecimal");
+        stdout.WriteLine("Benchmark profiles: Quick, Default, Full");
+        stdout.WriteLine("Benchmark weighting profiles: Smoke, SpeedFirst, Balanced, Exploratory, Exhaustive");
+        stdout.WriteLine($"Registered custom mutations: {FormatNames(CustomMutationRegistry.GetRegisteredMutationNames())}");
+        stdout.WriteLine($"Registered custom chunk mutations: {FormatNames(CustomMutationRegistry.GetRegisteredChunkMutationNames())}");
+        stdout.WriteLine("Advanced direct-flag scenario shaping remains intentionally narrower than the full in-memory model; use config JSON or code for broader control.");
         return 0;
+    }
+
+    private static string FormatNames(IReadOnlyCollection<string> names)
+    {
+        return names.Count == 0 ? "(none)" : string.Join(", ", names.OrderBy(static name => name, StringComparer.Ordinal));
     }
 
     private static int RunBenchmark(CliArguments arguments, TextWriter stdout, TextWriter stderr)
