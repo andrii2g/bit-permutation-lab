@@ -153,4 +153,37 @@ public sealed class SimplifiedCliTests
         Assert.Equal(0, decodeExitCode);
         Assert.Contains("Decoded: 12345", decodeStdout.ToString());
     }
+
+    [Fact]
+    public void List_WritesSupportedValues()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(["list"], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Supported simplified CLI values", stdout.ToString());
+        Assert.Contains("Benchmark profiles", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
+
+    [Fact]
+    public void Benchmark_QuickProfile_WritesRows()
+    {
+        var stdout = new StringWriter(new StringBuilder());
+        var stderr = new StringWriter(new StringBuilder());
+
+        int exitCode = CliApplication.Run(
+        [
+            "benchmark",
+            "--profile", "quick",
+            "--iterations", "5"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Profile: Quick", stdout.ToString());
+        Assert.Contains("Scenario | Value | Output", stdout.ToString());
+        Assert.Equal(string.Empty, stderr.ToString());
+    }
 }

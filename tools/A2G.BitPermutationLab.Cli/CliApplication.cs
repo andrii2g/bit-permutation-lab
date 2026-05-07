@@ -1,4 +1,5 @@
 using System.Globalization;
+using A2G.BitPermutationLab.Benchmarking;
 using A2G.BitPermutationLab.Binary;
 using A2G.BitPermutationLab.Chunking;
 using A2G.BitPermutationLab.Core;
@@ -29,8 +30,8 @@ public static class CliApplication
             {
                 "encode" => RunEncode(arguments, stdout, stderr),
                 "decode" => RunDecode(arguments, stdout, stderr),
-                "list" => NotImplemented(stderr, "The 'list' command is not implemented in this iteration."),
-                "benchmark" => NotImplemented(stderr, "The 'benchmark' command is not implemented in this iteration."),
+                "list" => RunList(stdout),
+                "benchmark" => RunBenchmark(arguments, stdout, stderr),
                 _ => Fail(stderr, $"Unknown command '{command}'.")
             };
         }
@@ -85,6 +86,42 @@ public static class CliApplication
         }
 
         stdout.WriteLine($"Decoded: {result.Value}");
+        return 0;
+    }
+
+    private static int RunList(TextWriter stdout)
+    {
+        stdout.WriteLine("Supported simplified CLI values");
+        stdout.WriteLine("Number kinds: uint32, uint64");
+        stdout.WriteLine("Mixers: none, xor, add, multiply");
+        stdout.WriteLine("Permutations: identity, not, rotate, byteswap, bitreverse, nibbleswap");
+        stdout.WriteLine("Chunk sizes: 4, 5, 6, 8");
+        stdout.WriteLine("Emitters: hex16, base32, base64url, bytes");
+        stdout.WriteLine("Output kinds: string, byte-array");
+        stdout.WriteLine("Byte array formats: hex, base64, csv-decimal");
+        stdout.WriteLine("Benchmark profiles: quick, default, full");
+        stdout.WriteLine("Advanced scenario shaping remains code-first and is intentionally not exposed by the simplified CLI.");
+        return 0;
+    }
+
+    private static int RunBenchmark(CliArguments arguments, TextWriter stdout, TextWriter stderr)
+    {
+        if (arguments.Contains("config") || arguments.Contains("output") || arguments.Contains("csv") || arguments.Contains("validate"))
+        {
+            throw new CliUsageException("The simplified benchmark command is code-driven only in this iteration. Config and report-file flags are not implemented.");
+        }
+
+        BenchmarkProfileKind profileKind = arguments.GetEnum("profile", BenchmarkProfileKind.Quick, ParseBenchmarkProfileKind);
+        int iterations = arguments.GetOptionalInt("iterations") ?? 1000;
+        if (iterations <= 0)
+        {
+            throw new CliUsageException("--iterations must be greater than zero.");
+        }
+
+        IReadOnlyList<BenchmarkResultRow> rows = BenchmarkRunner.Run(profileKind, iterations);
+        stdout.WriteLine($"Profile: {profileKind}");
+        stdout.WriteLine($"Iterations: {iterations}");
+        BenchmarkConsoleFormatter.Write(rows, stdout);
         return 0;
     }
 
@@ -318,6 +355,14 @@ public static class CliApplication
         _ => throw new CliUsageException($"Unsupported byte-array format '{value}'.")
     };
 
+    private static BenchmarkProfileKind ParseBenchmarkProfileKind(string value) => value.ToLowerInvariant() switch
+    {
+        "quick" => BenchmarkProfileKind.Quick,
+        "default" => BenchmarkProfileKind.Default,
+        "full" => BenchmarkProfileKind.Full,
+        _ => throw new CliUsageException($"Unsupported benchmark profile '{value}'.")
+    };
+
     private static AlphabetKind DefaultAlphabetKind(EmitterKind kind) => kind switch
     {
         EmitterKind.Hex16 => AlphabetKind.Hex16,
@@ -361,6 +406,8 @@ public static class CliApplication
         stderr.WriteLine("Usage:");
         stderr.WriteLine("  bpl encode --value <number> --bits <n> --chunk-size <n> --mix <kind> --permute <kind> --emitter <kind> [common flags]");
         stderr.WriteLine("  bpl decode --value <text-or-byte-array> --bits <n> --chunk-size <n> --mix <kind> --permute <kind> --emitter <kind> [common flags]");
+        stderr.WriteLine("  bpl list");
+        stderr.WriteLine("  bpl benchmark --profile quick|default|full [--iterations <n>]");
         stderr.WriteLine("Common flags:");
         stderr.WriteLine("  --number-kind uint32|uint64");
         stderr.WriteLine("  --salt <ulong> | --salt-text <text>");
@@ -450,6 +497,21 @@ internal sealed class CliArguments
         }
 
         throw new CliUsageException($"Flag '--{key}' requires an unsigned integer value.");
+    }
+
+    public int? GetOptionalInt(string key)
+    {
+        if (!_values.TryGetValue(key, out string? value))
+        {
+            return null;
+        }
+
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
+        {
+            return parsed;
+        }
+
+        throw new CliUsageException($"Flag '--{key}' requires an integer value.");
     }
 
     public TEnum GetEnum<TEnum>(string key, TEnum defaultValue, Func<string, TEnum> parser)
