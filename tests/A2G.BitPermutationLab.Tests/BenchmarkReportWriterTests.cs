@@ -33,4 +33,18 @@ public sealed class BenchmarkReportWriterTests
         Assert.Contains("AlgorithmWeight", text);
         Assert.Contains("CustomMutationWeight", text);
     }
+
+    [Fact]
+    public void CsvWriter_EmitsScenarioRangeBounds()
+    {
+        BenchmarkRunResult result = BenchmarkRunner.RunDetailed(BenchmarkExecutionOptions.CreateDefault(BenchmarkProfileKind.Quick, 2));
+        BenchmarkResultRow firstRow = result.Rows[0];
+        StringWriter writer = new();
+
+        CsvBenchmarkReportWriter.Write(result, writer);
+
+        string text = writer.ToString();
+        string expectedFragment = $",{firstRow.MinInput},{firstRow.MaxInput},{firstRow.InputValue},";
+        Assert.Contains(expectedFragment, text);
+    }
 }

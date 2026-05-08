@@ -21,7 +21,7 @@ It is not cryptography. The goal is to compare reversible combinations of:
 Encode:
 
 ```powershell
-dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll encode `
+dotnet run --project .\tools\A2G.BitPermutationLab.Cli -- encode `
   --value 12345 `
   --number-kind uint32 `
   --bits 32 `
@@ -37,7 +37,7 @@ dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab
 Decode:
 
 ```powershell
-dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll decode `
+dotnet run --project .\tools\A2G.BitPermutationLab.Cli -- decode `
   --value 7B0E8450 `
   --number-kind uint32 `
   --bits 32 `
@@ -53,13 +53,13 @@ dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab
 List supported simplified CLI values:
 
 ```powershell
-dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll list
+dotnet run --project .\tools\A2G.BitPermutationLab.Cli -- list
 ```
 
 Encode with advanced permutation settings and a plugin-loaded custom mutation:
 
 ```powershell
-dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll encode `
+dotnet run --project .\tools\A2G.BitPermutationLab.Cli -- encode `
   --value 12345 `
   --number-kind uint32 `
   --bits 32 `
@@ -80,13 +80,13 @@ dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab
 Run a benchmark profile:
 
 ```powershell
-dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll benchmark --profile quick --iterations 1000
+dotnet run --project .\tools\A2G.BitPermutationLab.Cli -- benchmark --profile quick --iterations 1000
 ```
 
 Run a direct single-scenario benchmark through BenchmarkDotNet:
 
 ```powershell
-dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll benchmark `
+dotnet run --project .\tools\A2G.BitPermutationLab.Cli -- benchmark `
   --mode benchmarkdotnet `
   --iterations 1000 `
   --number-kind uint32 `
@@ -104,7 +104,7 @@ dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab
 Run a weighted benchmark selection:
 
 ```powershell
-dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll benchmark `
+dotnet run --project .\tools\A2G.BitPermutationLab.Cli -- benchmark `
   --profile quick `
   --weighting-profile speed-first `
   --scenario-budget 4 `
@@ -177,7 +177,7 @@ Config-driven benchmark runs may include custom mutation plugin loading through 
 Weight overrides can also be applied from a separate weighting config:
 
 ```powershell
-dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll benchmark `
+dotnet run --project .\tools\A2G.BitPermutationLab.Cli -- benchmark `
   --profile default `
   --weights-config .\weights.json `
   --iterations 1000

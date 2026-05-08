@@ -78,4 +78,31 @@ public sealed class BenchmarkSelectionTests
 
         Assert.NotEqual(baselineIds, overriddenIds);
     }
+
+    [Fact]
+    public void WeightingOverrides_ComposeAcrossMixerAndPermutationDimensions()
+    {
+        WeightingOverrides overrides = new(
+            null,
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, WeightOverrideValues>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Xor"] = new WeightOverrideValues(2.0, 0.5)
+            },
+            new Dictionary<string, WeightOverrideValues>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Rotate"] = new WeightOverrideValues(3.0, 0.25)
+            },
+            new Dictionary<string, WeightOverrideValues>(StringComparer.OrdinalIgnoreCase));
+
+        BenchmarkScenario scenario = Assert.Single(
+            BenchmarkProfileFactory.CreateCandidates(overrides),
+            static scenario => scenario.ScenarioId == "xor-rotate-hex32:small");
+
+        Assert.Equal(1.25 * 2.0 * 3.0, scenario.Weights.AlgorithmWeight, 6);
+        Assert.Equal(0.70 * 0.5 * 0.25, scenario.Weights.ExpectedCostFactor, 6);
+    }
 }

@@ -141,6 +141,9 @@ public sealed class BenchmarkConfigLoaderTests
                     "weights": {
                       "mixers": {
                         "Xor": { "algorithmWeight": 2.5, "expectedCostFactor": 0.25 }
+                      },
+                      "permutations": {
+                        "Rotate": { "algorithmWeight": 3.0, "expectedCostFactor": 0.5 }
                       }
                     }
                   }
@@ -154,8 +157,8 @@ public sealed class BenchmarkConfigLoaderTests
             Assert.Equal<ulong>(777, loaded.Options.Selection.SamplingSeed);
             Assert.False(loaded.Options.Selection.IncludeRequiredBaselines);
             Assert.False(loaded.Options.Report.IncludeUnweightedReport);
-            Assert.Equal(2.5, loaded.Scenarios[0].Weights.AlgorithmWeight);
-            Assert.Equal(0.25, loaded.Scenarios[0].Weights.ExpectedCostFactor);
+            Assert.Equal(7.5, loaded.Scenarios[0].Weights.AlgorithmWeight);
+            Assert.Equal(0.125, loaded.Scenarios[0].Weights.ExpectedCostFactor, 6);
         }
         finally
         {
