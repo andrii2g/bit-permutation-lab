@@ -41,7 +41,12 @@ Use this file as a starting point for documenting a benchmark run after adding n
 
 | Scenario / Family | Range | Encode ns/op | Decode ns/op | RoundTrip ns/op | Weight | Cost | Notes |
 |---|---|---:|---:|---:|---:|---:|---|
-| sample | Small | 0 | 0 | 0 | 0 | 0 | replace |
+| `None + Identity + ByteArray` | Small | 42.0 | 39.5 | 81.5 | 4.200 | 0.25 | Sample baseline-style row. Replace with a real measured value. |
+| `Xor + Rotate + Hex16` | Small | 68.4 | 71.2 | 139.6 | 2.143 | 0.70 | Sample transformed row. Replace with a real measured value. |
+
+Suggested interpretation:
+- keep the table small in the summary report
+- paste the full Markdown or CSV benchmark export separately when needed
 
 ## Observations
 
