@@ -40,6 +40,7 @@ The benchmark system supports:
 - built-in benchmark profiles: `quick`, `default`, `full`
 - weighting profiles: `smoke`, `speed-first`, `balanced`, `exploratory`, `exhaustive`
 - deterministic sampling by `samplingSeed`
+- optional external weight overrides via `--weights-config`
 - optional scenario budgets
 - required baselines that are always included unless explicitly disabled
 
@@ -51,5 +52,15 @@ Current benchmark output supports:
 - weighting metadata view
 - Markdown export
 - CSV export
+
+Weighting overrides can change:
+
+- benchmark profile defaults
+- scenario budget
+- sampling seed
+- required-baseline inclusion
+- mixer weights
+- permutation weights
+- emitter weights
 
 Invalid combinations are skipped in benchmark mode and reported with reasons.
