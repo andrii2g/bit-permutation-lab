@@ -139,6 +139,7 @@ The benchmark path supports:
 - `--weighting-profile`
 - `--scenario-budget`
 - `--sampling-seed`
+- `--weights-config <weights.json>`
 - `--include-required-baselines`
 - `--report-weighted`
 - `--report-unweighted`
@@ -173,6 +174,15 @@ dotnet run --project .\benchmarks\A2G.BitPermutationLab.Benchmarks -- `
 
 Config-driven benchmark runs may include custom mutation plugin loading through JSON `pluginPath` and `typeName` fields.
 
+Weight overrides can also be applied from a separate weighting config:
+
+```powershell
+dotnet .\tools\A2G.BitPermutationLab.Cli\bin\Debug\net10.0\A2G.BitPermutationLab.Cli.dll benchmark `
+  --profile default `
+  --weights-config .\weights.json `
+  --iterations 1000
+```
+
 ## Status
 
 Most of the `PLAN.md` feature surface is implemented, including advanced direct CLI scenario flags, custom mutation plugin loading, config-driven benchmarks, quick-mode reports, and BenchmarkDotNet mode.
@@ -187,8 +197,8 @@ The current weighting implementation covers:
 - required baselines
 - deterministic scenario selection by seed
 - benchmark-profile defaults for weighting and budget
+- user overrides for mixer, permutation, and emitter weights through config
 - raw timing reports kept separate from weighting metadata
 
 What is still intentionally lightweight:
-- no external weights config file yet
-- BenchmarkDotNet runs are a separate execution path and do not yet feed back into the quick-mode Markdown/CSV matrix exporters
+- weighting overrides currently focus on mixer, permutation, and emitter families rather than every possible tier dimension
