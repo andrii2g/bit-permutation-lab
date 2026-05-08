@@ -6,6 +6,7 @@ public sealed record BenchmarkScenario(
     string ScenarioId,
     string Name,
     CodecParameters Parameters,
+    ParameterTierKind ParameterTier,
     ValueRangeKind ValueRangeKind,
     IReadOnlyList<ulong> Values,
     ScenarioWeights Weights);

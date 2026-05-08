@@ -1,3 +1,4 @@
+using A2G.BitPermutationLab.Chunking;
 using A2G.BitPermutationLab.Core;
 
 namespace A2G.BitPermutationLab.Benchmarking;
@@ -33,7 +34,7 @@ public static class BenchmarkConsoleFormatter
         foreach (BenchmarkMatrixRow row in matrixRows)
         {
             writer.WriteLine(
-                $"{row.FamilyKey} | {FormatMetric(row.TinyEncodeNanoseconds)} | {FormatMetric(row.TinyDecodeNanoseconds)} | {FormatMetric(row.TinyRoundTripNanoseconds)} | {FormatMetric(row.SmallEncodeNanoseconds)} | {FormatMetric(row.SmallDecodeNanoseconds)} | {FormatMetric(row.SmallRoundTripNanoseconds)} | {FormatMetric(row.LargeEncodeNanoseconds)} | {FormatMetric(row.LargeDecodeNanoseconds)} | {FormatMetric(row.LargeRoundTripNanoseconds)} | {row.SelectionWeight:F3} | {row.ExpectedCostFactor:F2} | {row.OutputLength} | n/a");
+                $"{row.FamilyKey} | {FormatMetric(row.TinyEncodeNanoseconds)} | {FormatMetric(row.TinyDecodeNanoseconds)} | {FormatMetric(row.TinyRoundTripNanoseconds)} | {FormatMetric(row.SmallEncodeNanoseconds)} | {FormatMetric(row.SmallDecodeNanoseconds)} | {FormatMetric(row.SmallRoundTripNanoseconds)} | {FormatMetric(row.LargeEncodeNanoseconds)} | {FormatMetric(row.LargeDecodeNanoseconds)} | {FormatMetric(row.LargeRoundTripNanoseconds)} | {row.SelectionWeight:F3} | {row.ExpectedCostFactor:F2} | {row.OutputLength} | {row.AllocatedBytes}");
         }
     }
 
@@ -42,13 +43,13 @@ public static class BenchmarkConsoleFormatter
         IReadOnlyList<BenchmarkWeightedSummaryRow> summaryRows = BuildWeightedSummaryRows(rows);
 
         writer.WriteLine("Weighting Metadata");
-        writer.WriteLine("ScenarioId | Profile | Range | MinInput | MaxInput | Weight | Cost | Baseline | Bits | Mixer | Permutation | Chunk | Emitter | Output");
-        writer.WriteLine("---|---|---|---:|---:|---:|---:|---|---:|---|---|---:|---|---");
+        writer.WriteLine("ScenarioId | Profile | Range | Tier | SaltSeed | MinInput | MaxInput | AlgorithmW | TierW | RangeW | EmitterW | CustomW | Weight | Cost | Baseline | Bits | Mixer | Mix Params | Permutation | Permute Params | Chunking | Chunk | Emitter | Alphabet | Output | CustomMutation | Position");
+        writer.WriteLine("---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---|---|---|---|---|---:|---|---|---|---|---");
 
         foreach (BenchmarkWeightedSummaryRow row in summaryRows)
         {
             writer.WriteLine(
-                $"{row.ScenarioId} | {row.Profile} | {row.ValueRangeKind} | {row.MinInput} | {row.MaxInput} | {row.SelectionWeight:F3} | {row.ExpectedCostFactor:F2} | {row.IsRequiredBaseline} | {row.BitLength} | {row.MixerKind} | {row.PermutationKind} | {row.ChunkSize} | {row.EmitterKind} | {row.OutputKind}");
+                $"{row.ScenarioId} | {row.Profile} | {row.ValueRangeKind} | {row.ParameterTier} | {row.SaltSeed} | {row.MinInput} | {row.MaxInput} | {row.AlgorithmWeight:F3} | {row.ParameterTierWeight:F3} | {row.ValueRangeWeight:F3} | {row.EmitterWeight:F3} | {row.CustomMutationWeight:F3} | {row.SelectionWeight:F3} | {row.ExpectedCostFactor:F2} | {row.IsRequiredBaseline} | {row.BitLength} | {row.MixerKind} | {row.MixerParameters} | {row.PermutationKind} | {row.PermutationParameters} | {row.ChunkingKind} | {row.ChunkSize} | {row.EmitterKind} | {row.AlphabetKind} | {row.OutputKind} | {row.CustomMutationKind} | {row.CustomMutationPosition}");
         }
     }
 
@@ -87,7 +88,8 @@ public static class BenchmarkConsoleFormatter
             GetAverage(group, ValueRangeKind.Large, static row => row.RoundTripNanoseconds),
             first.SelectionWeight,
             first.ExpectedCostFactor,
-            first.OutputLength);
+            first.OutputLength,
+            first.AllocatedBytes);
     }
 
     private static BenchmarkWeightedSummaryRow CreateWeightedSummaryRow(IGrouping<string, BenchmarkResultRow> group)
@@ -97,22 +99,35 @@ public static class BenchmarkConsoleFormatter
             first.ScenarioId,
             first.Profile,
             first.ValueRangeKind,
+            first.ParameterTier,
+            first.SaltSeed,
             group.Min(static row => row.InputValue),
             group.Max(static row => row.InputValue),
+            first.AlgorithmWeight,
+            first.ParameterTierWeight,
+            first.ValueRangeWeight,
+            first.EmitterWeight,
+            first.CustomMutationWeight,
             first.SelectionWeight,
             first.ExpectedCostFactor,
             first.IsRequiredBaseline,
             first.BitLength,
             first.MixerKind,
+            first.MixerParameters,
             first.PermutationKind,
+            first.PermutationParameters,
+            first.ChunkingKind,
             first.ChunkSize,
             first.EmitterKind,
-            first.OutputKind);
+            first.AlphabetKind,
+            first.OutputKind,
+            first.CustomMutationKind,
+            first.CustomMutationPosition);
     }
 
     private static string BuildFamilyKey(BenchmarkResultRow row)
     {
-        return $"bit{row.BitLength} + {row.MixerKind} + {row.PermutationKind} + chunk{row.ChunkSize} + {row.EmitterKind}";
+        return $"{row.BinaryKind}({row.BitOrderKind},{row.ByteOrderKind}) + {row.MixerKind}({row.MixerParameters}) + {row.PermutationKind}({row.PermutationParameters}) + {row.ChunkingKind}(chunk{row.ChunkSize}) + {row.EmitterKind}({row.AlphabetKind},{row.OutputKind})";
     }
 
     private static string GetScenarioFamilyId(string scenarioId)
@@ -145,21 +160,35 @@ public static class BenchmarkConsoleFormatter
         double? LargeRoundTripNanoseconds,
         double SelectionWeight,
         double ExpectedCostFactor,
-        int OutputLength);
+        int OutputLength,
+        long AllocatedBytes);
 
     private sealed record BenchmarkWeightedSummaryRow(
         string ScenarioId,
         string Profile,
         ValueRangeKind ValueRangeKind,
+        ParameterTierKind ParameterTier,
+        ulong SaltSeed,
         ulong MinInput,
         ulong MaxInput,
+        double AlgorithmWeight,
+        double ParameterTierWeight,
+        double ValueRangeWeight,
+        double EmitterWeight,
+        double CustomMutationWeight,
         double SelectionWeight,
         double ExpectedCostFactor,
         bool IsRequiredBaseline,
         int BitLength,
         MixerKind MixerKind,
+        string MixerParameters,
         PermutationKind PermutationKind,
+        string PermutationParameters,
+        ChunkerKind ChunkingKind,
         int ChunkSize,
         EmitterKind EmitterKind,
-        OutputKind OutputKind);
+        AlphabetKind AlphabetKind,
+        OutputKind OutputKind,
+        string CustomMutationKind,
+        string CustomMutationPosition);
 }
