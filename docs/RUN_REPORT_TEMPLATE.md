@@ -43,6 +43,8 @@ Use this file as a starting point for documenting a benchmark run after adding n
 |---|---|---:|---:|---:|---:|---:|---|
 | `None + Identity + ByteArray` | Small | 42.0 | 39.5 | 81.5 | 4.200 | 0.25 | Sample baseline-style row. Replace with a real measured value. |
 | `Xor + Rotate + Hex16` | Small | 68.4 | 71.2 | 139.6 | 2.143 | 0.70 | Sample transformed row. Replace with a real measured value. |
+| `Add + BitReverse + Base64Url` | Small | 83.7 | 87.9 | 171.6 | 1.182 | 1.10 | Sample medium-cost row. Replace with a real measured value. |
+| `Xor + Feistel + Base64Url` | Small | 121.4 | 128.6 | 250.0 | 0.367 | 3.00 | Sample high-cost row. Replace with a real measured value. |
 
 Suggested interpretation:
 - keep the table small in the summary report
