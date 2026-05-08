@@ -242,6 +242,61 @@ public sealed class SimplifiedCliTests
     }
 
     [Fact]
+    public void Benchmark_Accepts_WeightsConfig()
+    {
+        string tempDirectory = Path.Combine(Path.GetTempPath(), "bit-permutation-lab-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        string weightsPath = Path.Combine(tempDirectory, "weights.json");
+
+        try
+        {
+            File.WriteAllText(weightsPath,
+                """
+                {
+                  "weighting": {
+                    "profile": "exploratory",
+                    "scenarioBudget": 3,
+                    "samplingSeed": 123,
+                    "includeRequiredBaselines": false,
+                    "includeRawUnweightedReport": false,
+                    "weights": {
+                      "emitters": {
+                        "Base32Crockford": { "algorithmWeight": 5.0, "expectedCostFactor": 0.25 }
+                      }
+                    }
+                  }
+                }
+                """);
+
+            var stdout = new StringWriter(new StringBuilder());
+            var stderr = new StringWriter(new StringBuilder());
+
+            int exitCode = CliApplication.Run(
+            [
+                "benchmark",
+                "--profile", "default",
+                "--weights-config", weightsPath,
+                "--iterations", "5"
+            ], stdout, stderr);
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains("WeightingProfile: Exploratory", stdout.ToString());
+            Assert.Contains("ScenarioBudget: 3", stdout.ToString());
+            Assert.Contains("SamplingSeed: 123", stdout.ToString());
+            Assert.Contains("IncludeRequiredBaselines: False", stdout.ToString());
+            Assert.DoesNotContain("Raw Performance Matrix", stdout.ToString());
+            Assert.Equal(string.Empty, stderr.ToString());
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, true);
+            }
+        }
+    }
+
+    [Fact]
     public void Encode_Supports_CustomAlphabet_And_CharArray_Output()
     {
         var stdout = new StringWriter(new StringBuilder());

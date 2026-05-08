@@ -105,4 +105,61 @@ public sealed class BenchmarkConfigLoaderTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Load_AppliesWeightingSectionOverrides()
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path,
+                """
+                {
+                  "scenarios": [
+                    {
+                      "name": "xor-rotate-hex32",
+                      "values": [1000],
+                      "parameters": {
+                        "name": "xor-rotate-hex32",
+                        "numberKind": "UInt32",
+                        "bitLength": 32,
+                        "saltSeed": 42,
+                        "binary": { "kind": "FixedUnsigned", "bitOrder": "MsbFirst", "byteOrder": "BigEndian" },
+                        "mixer": { "kind": "Xor", "maskDerivation": "SplitMix64" },
+                        "permutation": { "kind": "Rotate", "rotateBy": 11 },
+                        "chunking": { "kind": "Fixed", "chunkSize": 4, "chunkReadOrder": "MsbFirst" },
+                        "emitter": { "kind": "Hex16", "alphabetKind": "Hex16", "outputKind": "String", "byteArrayTextFormat": "Hex" }
+                      }
+                    }
+                  ],
+                  "weighting": {
+                    "profile": "exploratory",
+                    "scenarioBudget": 3,
+                    "samplingSeed": 777,
+                    "includeRequiredBaselines": false,
+                    "includeRawUnweightedReport": false,
+                    "weights": {
+                      "mixers": {
+                        "Xor": { "algorithmWeight": 2.5, "expectedCostFactor": 0.25 }
+                      }
+                    }
+                  }
+                }
+                """);
+
+            LoadedBenchmarkConfig loaded = BenchmarkConfigLoader.Load(path);
+
+            Assert.Equal(WeightingProfileKind.Exploratory, loaded.Options.Selection.WeightingProfile);
+            Assert.Equal(3, loaded.Options.Selection.ScenarioBudget);
+            Assert.Equal<ulong>(777, loaded.Options.Selection.SamplingSeed);
+            Assert.False(loaded.Options.Selection.IncludeRequiredBaselines);
+            Assert.False(loaded.Options.Report.IncludeUnweightedReport);
+            Assert.Equal(2.5, loaded.Scenarios[0].Weights.AlgorithmWeight);
+            Assert.Equal(0.25, loaded.Scenarios[0].Weights.ExpectedCostFactor);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

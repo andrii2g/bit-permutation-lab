@@ -125,10 +125,10 @@ public static class CliApplication
             return RunBenchmarkDotNet(arguments, stdout, stderr);
         }
 
-        BenchmarkReportOptions report = CreateReportOptions(arguments);
+        WeightingOverrides overrides = LoadWeightingOverrides(arguments);
+        BenchmarkReportOptions report = CreateReportOptions(arguments, overrides.IncludeRawUnweightedReport ?? true);
         bool includeInvalid = arguments.GetOptionalBool("include-invalid") ?? true;
         int top = arguments.GetOptionalInt("top") ?? 5;
-        WeightingOverrides overrides = LoadWeightingOverrides(arguments);
 
         if (arguments.Contains("config"))
         {
@@ -136,7 +136,7 @@ public static class CliApplication
             BenchmarkExecutionOptions execution = loaded.Options with
             {
                 Iterations = arguments.GetOptionalInt("iterations") ?? loaded.Options.Iterations,
-                Report = report,
+                Report = CreateReportOptions(arguments, loaded.Options.Report.IncludeUnweightedReport),
                 ValidateScenarios = arguments.GetOptionalBool("validate") ?? loaded.Options.ValidateScenarios
             };
 
@@ -196,12 +196,14 @@ public static class CliApplication
     {
         int iterations = arguments.GetOptionalInt("iterations") ?? 1000;
         int top = arguments.GetOptionalInt("top") ?? 5;
+        WeightingOverrides overrides = LoadWeightingOverrides(arguments);
         CodecParameters parameters = CreateParameters(arguments);
         IReadOnlyList<ulong> values = GetDirectBenchmarkValues(arguments, parameters.BitLength);
         BenchmarkScenario scenario = new(
             $"{parameters.Name}:direct",
             parameters.Name,
             parameters,
+            ParameterTierKind.Explicit,
             InferRangeKind(values),
             values,
             new ScenarioWeights(1.0, 1.0, 1.0, 1.0, parameters.CustomMutation is null && parameters.CustomChunkMutation is null ? 1.0 : 1.2, 1.0, 1.0, false));
@@ -211,7 +213,7 @@ public static class CliApplication
             BenchmarkModeKind.Quick.ToString(),
             iterations,
             new BenchmarkSelectionOptions(WeightingProfileKind.Balanced, 1, 0UL, true),
-            CreateReportOptions(arguments),
+            CreateReportOptions(arguments, overrides.IncludeRawUnweightedReport ?? true),
             arguments.GetOptionalBool("validate") ?? true);
 
         BenchmarkRunResult result = BenchmarkRunner.RunDetailed([scenario], execution);
@@ -299,10 +301,10 @@ public static class CliApplication
         }
     }
 
-    private static BenchmarkReportOptions CreateReportOptions(CliArguments arguments)
+    private static BenchmarkReportOptions CreateReportOptions(CliArguments arguments, bool defaultIncludeUnweightedReport)
     {
         bool includeWeightedReport = arguments.GetOptionalBool("report-weighted") ?? true;
-        bool includeUnweightedReport = arguments.GetOptionalBool("report-unweighted") ?? true;
+        bool includeUnweightedReport = arguments.GetOptionalBool("report-unweighted") ?? defaultIncludeUnweightedReport;
         if (!includeWeightedReport && !includeUnweightedReport)
         {
             throw new CliUsageException("At least one of --report-weighted or --report-unweighted must be true.");

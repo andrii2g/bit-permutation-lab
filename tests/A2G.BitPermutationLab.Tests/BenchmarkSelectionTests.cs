@@ -55,4 +55,27 @@ public sealed class BenchmarkSelectionTests
 
         Assert.NotEqual(speedIds, exploratoryIds);
     }
+
+    [Fact]
+    public void WeightingOverrides_CanChangeSelectedScenarioSet()
+    {
+        BenchmarkSelectionOptions options = new(WeightingProfileKind.Balanced, 6, 1234);
+        WeightingOverrides overrides = new(
+            null,
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, WeightOverrideValues>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, WeightOverrideValues>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, WeightOverrideValues>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Base32Crockford"] = new WeightOverrideValues(5.0, 0.25)
+            });
+
+        string[] baselineIds = BenchmarkProfileFactory.Create(options).Select(static scenario => scenario.ScenarioId).ToArray();
+        string[] overriddenIds = BenchmarkProfileFactory.Create(options, overrides).Select(static scenario => scenario.ScenarioId).ToArray();
+
+        Assert.NotEqual(baselineIds, overriddenIds);
+    }
 }
