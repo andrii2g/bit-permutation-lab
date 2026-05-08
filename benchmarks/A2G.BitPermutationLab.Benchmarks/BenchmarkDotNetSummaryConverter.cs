@@ -132,6 +132,8 @@ internal static class BenchmarkDotNetSummaryConverter
                 ScenarioCase.Parameters.CustomChunkMutation is not null
                     ? ScenarioCase.Parameters.CustomChunkMutation.Position.ToString()
                     : ScenarioCase.Parameters.CustomMutation?.Position.ToString() ?? "None",
+                ScenarioCase.MinInput,
+                ScenarioCase.MaxInput,
                 ScenarioCase.InputValue,
                 ScenarioCase.Encoded.OutputLength,
                 EncodeNanoseconds,

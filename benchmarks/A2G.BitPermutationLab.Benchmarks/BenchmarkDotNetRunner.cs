@@ -24,6 +24,9 @@ internal static class BenchmarkDotNetRunner
     {
         foreach (BenchmarkScenario scenario in scenarios)
         {
+            ulong minInput = scenario.Values.Count == 0 ? 0UL : scenario.Values.Min();
+            ulong maxInput = scenario.Values.Count == 0 ? 0UL : scenario.Values.Max();
+
             foreach (ulong value in scenario.Values)
             {
                 CodecResult encoded = pipeline.Encode(value, scenario.Parameters);
@@ -41,6 +44,8 @@ internal static class BenchmarkDotNetRunner
                     scenario.Weights.SelectionWeight,
                     scenario.Weights.ExpectedCostFactor,
                     scenario.Weights.IsRequiredBaseline,
+                    minInput,
+                    maxInput,
                     value,
                     scenario.Parameters,
                     encoded);

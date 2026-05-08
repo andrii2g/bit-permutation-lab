@@ -17,6 +17,8 @@ public sealed record ScenarioBenchmarkCase(
     double SelectionWeight,
     double ExpectedCostFactor,
     bool IsRequiredBaseline,
+    ulong MinInput,
+    ulong MaxInput,
     ulong InputValue,
     CodecParameters Parameters,
     CodecResult Encoded);
