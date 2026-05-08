@@ -36,6 +36,8 @@ public sealed record BenchmarkResultRow(
     OutputKind OutputKind,
     string CustomMutationKind,
     string CustomMutationPosition,
+    ulong MinInput,
+    ulong MaxInput,
     ulong InputValue,
     int OutputLength,
     double EncodeNanoseconds,

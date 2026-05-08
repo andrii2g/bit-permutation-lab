@@ -29,6 +29,9 @@ public static class BenchmarkRunner
 
         foreach (BenchmarkScenario scenario in scenarios)
         {
+            ulong minInput = scenario.Values.Count == 0 ? 0UL : scenario.Values.Min();
+            ulong maxInput = scenario.Values.Count == 0 ? 0UL : scenario.Values.Max();
+
             if (options.ValidateScenarios)
             {
                 ValidationResult parameterValidation = ParameterValidator.Validate(scenario.Parameters);
@@ -108,6 +111,8 @@ public static class BenchmarkRunner
                         scenario.Parameters.CustomChunkMutation is not null
                             ? scenario.Parameters.CustomChunkMutation.Position.ToString()
                             : scenario.Parameters.CustomMutation?.Position.ToString() ?? "None",
+                        minInput,
+                        maxInput,
                         value,
                         encoded.OutputLength,
                         encodeNs,

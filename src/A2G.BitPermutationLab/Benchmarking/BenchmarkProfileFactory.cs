@@ -319,21 +319,21 @@ public static class BenchmarkProfileFactory
 
         if (overrides.MixerOverrides.TryGetValue(parameters.Mixer.Kind.ToString(), out WeightOverrideValues? mixerOverride))
         {
-            algorithmWeight = mixerOverride.AlgorithmWeight ?? algorithmWeight;
-            expectedCostFactor = mixerOverride.ExpectedCostFactor ?? expectedCostFactor;
+            algorithmWeight *= mixerOverride.AlgorithmWeight ?? 1.00;
+            expectedCostFactor *= mixerOverride.ExpectedCostFactor ?? 1.00;
         }
 
         if (overrides.PermutationOverrides.TryGetValue(parameters.Permutation.Kind.ToString(), out WeightOverrideValues? permutationOverride))
         {
-            algorithmWeight = permutationOverride.AlgorithmWeight ?? algorithmWeight;
-            expectedCostFactor = permutationOverride.ExpectedCostFactor ?? expectedCostFactor;
+            algorithmWeight *= permutationOverride.AlgorithmWeight ?? 1.00;
+            expectedCostFactor *= permutationOverride.ExpectedCostFactor ?? 1.00;
         }
 
         double emitterWeight = weights.EmitterWeight;
         if (overrides.EmitterOverrides.TryGetValue(parameters.Emitter.Kind.ToString(), out WeightOverrideValues? emitterOverride))
         {
-            emitterWeight = emitterOverride.AlgorithmWeight ?? emitterWeight;
-            expectedCostFactor = emitterOverride.ExpectedCostFactor ?? expectedCostFactor;
+            emitterWeight *= emitterOverride.AlgorithmWeight ?? 1.00;
+            expectedCostFactor *= emitterOverride.ExpectedCostFactor ?? 1.00;
         }
 
         double selectionWeight = algorithmWeight
